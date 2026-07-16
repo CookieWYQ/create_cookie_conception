@@ -27,7 +27,7 @@ import net.minecraft.world.level.material.MapColor;
 import static cretae.cookiewyq.create_cookie_conception.CookieConceptionMod.REGISTRATE;
 
 public class ModBlocks {
-    // inventory_proxy 使用 top 和 side 纹理（cubeBottomTop 模型）
+    // inventory_proxy uses cubeBottomTop model with top and side textures
     public static final BlockEntry<Block> INVENTORY_PROXY = REGISTRATE
             .block("inventory_proxy", Block::new)
             .initialProperties(() -> Blocks.IRON_BLOCK)
@@ -53,7 +53,7 @@ public class ModBlocks {
                     .save(provider, CookieConceptionMod.modLoc("inventory_proxy")))
             .register();
 
-    // 三个储罐（使用 cube_all 模型）
+    // Three tank blocks (use cube_all model)
     public static final BlockEntry<AndesiteContainerBlock> ANDESITE_TANK = REGISTRATE
             .block("andesite_tank", AndesiteContainerBlock::new)
             .initialProperties(() -> Blocks.IRON_BLOCK)
