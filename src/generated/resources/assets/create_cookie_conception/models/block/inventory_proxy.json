@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "bottom": "create_cookie_conception:block/inventory_proxy/inventory_proxy_top",
+    "side": "create_cookie_conception:block/inventory_proxy/inventory_proxy_side",
+    "top": "create_cookie_conception:block/inventory_proxy/inventory_proxy_side"
+  }
+}

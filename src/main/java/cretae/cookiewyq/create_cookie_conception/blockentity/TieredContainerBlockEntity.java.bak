@@ -1,0 +1,147 @@
+package cretae.cookiewyq.create_cookie_conception.blockentity;
+
+import cretae.cookiewyq.create_cookie_conception.blocks.tiered.TieredContainerBlock;
+import cretae.cookiewyq.create_cookie_conception.init.ModBlockEntities;
+import cretae.cookiewyq.create_cookie_conception.menu.TieredContainerMenu;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.Connection;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.world.MenuProvider;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.common.util.LazyOptional;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.FluidTank;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.items.IItemHandler;
+import net.neoforged.neoforge.items.ItemStackHandler;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class TieredContainerBlockEntity extends BlockEntity implements MenuProvider {
+    private ItemStackHandler itemHandler;
+    private final List<FluidTank> fluidTanks = new ArrayList<>();
+    private final LazyOptional<IItemHandler> itemLazy = LazyOptional.of(() -> itemHandler);
+    private final LazyOptional<IFluidHandler> fluidLazy = LazyOptional.of(() -> new MultiTankFluidHandler(fluidTanks));
+
+    public TieredContainerBlockEntity(BlockPos pos, BlockState state) {
+        super(ModBlockEntities.TIERED_CONTAINER.get(), pos, state);
+        refreshStorageCapacities(state);
+    }
+
+    private void refreshStorageCapacities(BlockState state) {
+        if (state.getBlock() instanceof TieredContainerBlock tiered) {
+            int slots = tiered.getInventorySlots();
+            int tankCount = tiered.getFluidTankCount();
+            int tankCap = tiered.getFluidTankCapacity();
+
+            if (itemHandler == null || itemHandler.getSlots() != slots) {
+                if (itemHandler != null) itemLazy.invalidate();
+                itemHandler = new ItemStackHandler(slots);
+            }
+
+            if (fluidTanks.size() != tankCount) {
+                fluidLazy.invalidate();
+                fluidTanks.clear();
+                for (int i = 0; i < tankCount; i++) fluidTanks.add(new FluidTank(tankCap));
+            } else {
+                for (FluidTank tank : fluidTanks) tank.setCapacity(tankCap);
+            }
+        }
+    }
+
+    @Override public void onLoad() { super.onLoad(); refreshStorageCapacities(getBlockState()); }
+    @Override public void setBlockState(BlockState state) { super.setBlockState(state); refreshStorageCapacities(state); }
+
+    public ItemStackHandler getItemHandler() { return itemHandler; }
+    public List<FluidTank> getFluidTanks() { return fluidTanks; }
+
+    @Override
+    public @NotNull <T> LazyOptional<T> getCapability(@NotNull net.neoforged.neoforge.capabilities.Capability<T> cap, @Nullable net.minecraft.core.Direction side) {
+        if (cap == Capabilities.ItemHandler.BLOCK) return itemLazy.cast();
+        if (cap == Capabilities.FluidHandler.BLOCK) return fluidLazy.cast();
+        return super.getCapability(cap, side);
+    }
+
+    @Override
+    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.saveAdditional(tag, registries);
+        tag.put("Inventory", itemHandler.serializeNBT(registries));
+        CompoundTag tanksTag = new CompoundTag();
+        for (int i = 0; i < fluidTanks.size(); i++)
+            tanksTag.put("Tank" + i, fluidTanks.get(i).writeToNBT(registries, new CompoundTag()));
+        tag.put("FluidTanks", tanksTag);
+    }
+
+    @Override
+    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.loadAdditional(tag, registries);
+        refreshStorageCapacities(getBlockState());
+        itemHandler.deserializeNBT(registries, tag.getCompound("Inventory"));
+        CompoundTag tanksTag = tag.getCompound("FluidTanks");
+        for (int i = 0; i < fluidTanks.size(); i++)
+            if (tanksTag.contains("Tank" + i))
+                fluidTanks.get(i).readFromNBT(registries, tanksTag.getCompound("Tank" + i));
+    }
+
+    @Override
+    public Component getDisplayName() {
+        return Component.translatable("block.create_cookie_conception." + getBlockState().getBlock().getDescriptionId().replace("block.create_cookie_conception.", ""));
+    }
+
+    @Nullable
+    @Override
+    public AbstractContainerMenu createMenu(int id, Inventory inv, Player player) {
+        return new TieredContainerMenu(id, inv, worldPosition, itemHandler.getSlots(), fluidTanks.size());
+    }
+
+    @Nullable @Override public ClientboundBlockEntityDataPacket getUpdatePacket() { return ClientboundBlockEntityDataPacket.create(this); }
+    @Override public CompoundTag getUpdateTag(HolderLookup.Provider registries) { return saveWithoutMetadata(registries); }
+    @Override public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket pkt, HolderLookup.Provider registries) { loadAdditional(pkt.getTag(), registries); }
+
+    public void onContentsChanged() {
+        setChanged();
+        if (level != null) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+    }
+
+    private static class MultiTankFluidHandler implements IFluidHandler {
+        private final List<FluidTank> tanks;
+        MultiTankFluidHandler(List<FluidTank> tanks) { this.tanks = tanks; }
+
+        @Override public int getTanks() { return tanks.size(); }
+        @Override public @NotNull FluidStack getFluidInTank(int tank) { return tanks.get(tank).getFluid(); }
+        @Override public int getTankCapacity(int tank) { return tanks.get(tank).getCapacity(); }
+        @Override public boolean isFluidValid(int tank, @NotNull FluidStack stack) { return tanks.get(tank).isFluidValid(stack); }
+
+        @Override
+        public int fill(FluidStack resource, FluidAction action) {
+            if (resource.isEmpty()) return 0;
+            for (FluidTank tank : tanks) if (tank.getFluid().isFluidEqual(resource)) return tank.fill(resource, action);
+            for (FluidTank tank : tanks) if (tank.getFluid().isEmpty()) return tank.fill(resource, action);
+            return 0;
+        }
+
+        @Override
+        public @NotNull FluidStack drain(FluidStack resource, FluidAction action) {
+            if (resource.isEmpty()) return FluidStack.EMPTY;
+            for (FluidTank tank : tanks) if (tank.getFluid().isFluidEqual(resource)) return tank.drain(resource.getAmount(), action);
+            return FluidStack.EMPTY;
+        }
+
+        @Override
+        public @NotNull FluidStack drain(int maxDrain, FluidAction action) {
+            for (FluidTank tank : tanks) if (!tank.getFluid().isEmpty()) return tank.drain(maxDrain, action);
+            return FluidStack.EMPTY;
+        }
+    }
+}

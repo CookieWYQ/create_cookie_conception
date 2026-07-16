@@ -1,0 +1,56 @@
+package cretae.cookiewyq.create_cookie_conception.blocks;
+
+import com.simibubi.create.AllBlocks;
+import com.simibubi.create.AllItems;
+import com.simibubi.create.AllTags;
+import com.simibubi.create.foundation.data.BlockStateGen;
+import com.simibubi.create.foundation.data.ModelGen;
+import com.simibubi.create.foundation.data.TagGen;
+import com.tterrag.registrate.providers.RegistrateRecipeProvider;
+import com.tterrag.registrate.util.entry.BlockEntry;
+import cretae.cookiewyq.create_cookie_conception.CookieConceptionMod;
+import net.minecraft.data.recipes.RecipeCategory;
+import net.minecraft.data.recipes.ShapedRecipeBuilder;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.item.CreativeModeTabs;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.SoundType;
+import net.minecraft.world.level.material.MapColor;
+
+import static cretae.cookiewyq.create_cookie_conception.CookieConceptionMod.REGISTRATE;
+
+
+public class ModBlocks {
+    public static final BlockEntry<Block> INVENTORY_PROXY = REGISTRATE
+            .block("inventory_proxy", Block::new)
+            .initialProperties(() -> Blocks.IRON_BLOCK)
+            .properties(p -> p.mapColor(MapColor.COLOR_YELLOW))
+            .properties(p -> p.sound(SoundType.METAL))
+            .properties(p -> p.strength(3.0f, 6.0f))
+            .properties(p -> p.noOcclusion())
+            .blockstate(BlockStateGen.axisBlockProvider(true))
+//            .blockstate((c, p) -> p.simpleBlock(c.get()))
+            .blockstate(BlockStateGen.axisBlockProvider(true))
+            .transform(TagGen.pickaxeOnly())
+            .tag(BlockTags.MINEABLE_WITH_PICKAXE)
+//            .loot((loot, block) -> loot.dropOther(block, ModItems))
+            .lang("Inventory Proxy")
+            .item()
+            .tab(CreativeModeTabs.COMBAT)
+            .transform(ModelGen.customItemModel())
+            .recipe((ctx, provider) -> ShapedRecipeBuilder.shaped(RecipeCategory.COMBAT, ctx.get())
+                    .pattern("B B")
+                    .pattern("AFA")
+                    .pattern("B B")
+                    .define('B', AllBlocks.BRASS_CASING.asItem())
+                    .define('A', AllItems.ANDESITE_ALLOY.asItem())
+                    .define('F', AllBlocks.BRASS_FUNNEL.asItem())
+                    .unlockedBy("has_brass_casing", RegistrateRecipeProvider.has(AllBlocks.BRASS_CASING.asItem()))
+                    .save(provider, CookieConceptionMod.modLoc("inventory_proxy")))
+            .register();
+
+    public static void register() {
+    }
+}

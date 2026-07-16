@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "item": "create:andesite_alloy"
+    },
+    "B": {
+      "item": "create:brass_casing"
+    },
+    "F": {
+      "item": "create:brass_funnel"
+    }
+  },
+  "pattern": [
+    "B B",
+    "AFA",
+    "B B"
+  ],
+  "result": {
+    "count": 1,
+    "id": "create_cookie_conception:inventory_proxy"
+  }
+}

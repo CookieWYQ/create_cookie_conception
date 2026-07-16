@@ -1,0 +1,58 @@
+package cretae.cookiewyq.create_cookie_conception.screen;
+
+import cretae.cookiewyq.create_cookie_conception.menu.TieredContainerMenu;
+import com.mojang.blaze3d.systems.RenderSystem;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Inventory;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.FluidTank;
+import java.util.List;
+
+public class TieredContainerScreen extends AbstractContainerScreen<TieredContainerMenu> {
+    private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath("create_cookie_conception", "textures/gui/container/tiered_container.png");
+
+    public TieredContainerScreen(TieredContainerMenu menu, Inventory inv, Component title) {
+        super(menu, inv, title);
+        this.imageWidth = 176;
+        this.imageHeight = 166;
+        this.inventoryLabelY = this.imageHeight - 94;
+    }
+
+    @Override
+    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
+        RenderSystem.setShaderTexture(0, TEXTURE);
+        graphics.blit(TEXTURE, leftPos, topPos, 0, 0, imageWidth, imageHeight);
+
+        if (menu.getBlockEntity() == null) return;
+        List<FluidTank> tanks = menu.getBlockEntity().getFluidTanks();
+        int startX = leftPos - 22;
+        int startY = topPos + 18;
+
+        for (int i = 0; i < tanks.size(); i++) {
+            int y = startY + i * 22;
+            FluidTank tank = tanks.get(i);
+            FluidStack fluid = tank.getFluid();
+            graphics.fill(startX, y, startX + 18, y + 18, 0xFF8B8B8B);
+            if (!fluid.isEmpty()) {
+                int capacity = tank.getCapacity();
+                int amount = fluid.getAmount();
+                int fluidHeight = (int)(16F * amount / capacity);
+                int color = net.neoforged.neoforge.client.extensions.common.IClientFluidTypeExtensions.of(fluid.getFluid()).getTintColor();
+                graphics.fill(startX + 1, y + 17 - fluidHeight, startX + 17, y + 17, color);
+                if (isHovering(startX - leftPos, y - topPos, 18, 18, mouseX, mouseY)) {
+                    graphics.renderTooltip(font, Component.literal(
+                            fluid.getHoverName().getString() + ": " + amount + "/" + capacity + " mB"), mouseX, mouseY);
+                }
+            }
+        }
+    }
+
+    @Override
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
+        this.renderTooltip(graphics, mouseX, mouseY);
+    }
+}

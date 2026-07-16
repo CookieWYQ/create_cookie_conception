@@ -1,0 +1,8 @@
+{
+  "loader": "create_cookie_conception:tank_dynamic",
+  "parent": "block/block",
+  "textures": {
+    "all": "create_cookie_conception:block/sturdy_tank"
+  },
+  "render_type": "translucent"
+}

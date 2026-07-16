@@ -1,0 +1,39 @@
+package cretae.cookiewyq.create_cookie_conception.items;
+
+import cretae.cookiewyq.create_cookie_conception.blockentity.TieredContainerBlockEntity;
+import cretae.cookiewyq.create_cookie_conception.blocks.tiered.TieredContainerBlock;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import org.jetbrains.annotations.NotNull;
+
+public class TieredContainerBlockItem extends BlockItem {
+    public static final String TAG_BLOCK_ENTITY_DATA = "BlockEntityTag";
+
+    public TieredContainerBlockItem(Block block, Properties properties) {
+        super(block, properties);
+    }
+
+    @Override
+    protected boolean updateCustomBlockEntityTag(@NotNull BlockPos pos, @NotNull Level level, net.minecraft.world.entity.player.Player player, @NotNull ItemStack stack, @NotNull BlockState state) {
+        if (stack.has(TAG_BLOCK_ENTITY_DATA)) {
+            CompoundTag beTag = stack.getOrDefault(TAG_BLOCK_ENTITY_DATA, new CompoundTag());
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be instanceof TieredContainerBlockEntity tieredBe) {
+                tieredBe.loadWithComponents(beTag, level.registryAccess());
+                tieredBe.setChanged();
+                if (!level.isClientSide) {
+                    level.sendBlockUpdated(pos, state, state, 3);
+                }
+                return true;
+            }
+        }
+        return super.updateCustomBlockEntityTag(pos, level, player, stack, state);
+    }
+}
