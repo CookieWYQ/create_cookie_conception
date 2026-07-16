@@ -3,13 +3,12 @@ package cretae.cookiewyq.create_cookie_conception.blocks.tiered;
 import com.simibubi.create.AllItems;
 import cretae.cookiewyq.create_cookie_conception.blockentity.TieredContainerBlockEntity;
 import cretae.cookiewyq.create_cookie_conception.init.ModBlockEntities;
+import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.*;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.ItemInteractionResult;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
@@ -21,10 +20,14 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.phys.BlockHitResult;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.List;
 
+@MethodsReturnNonnullByDefault
+@ParametersAreNonnullByDefault
 public class AndesiteContainerBlock extends Block implements EntityBlock, TieredContainerBlock {
     public AndesiteContainerBlock(BlockBehaviour.Properties properties) { super(properties); }
 
@@ -34,21 +37,19 @@ public class AndesiteContainerBlock extends Block implements EntityBlock, Tiered
 
     @Nullable
     @Override
-    public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+    public BlockEntity newBlockEntity(@NotNull BlockPos pos, BlockState state) {
         return new TieredContainerBlockEntity(ModBlockEntities.TIERED_CONTAINER.get(), pos, state);
     }
 
-    // Allow empty-hand breaking to drop the block
     @Override
     public boolean canHarvestBlock(BlockState state, BlockGetter level, BlockPos pos, Player player) {
         return true;
     }
 
-    // Right-click with empty hand opens GUI
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof TieredContainerBlockEntity be) {
-            ((ServerPlayer) player).openMenu(be, buf -> {
+            player.openMenu(be, buf -> {
                 buf.writeBlockPos(pos);
                 buf.writeVarInt(be.getItemHandler().getSlots());
                 buf.writeVarInt(be.getFluidTanks().size());
@@ -57,7 +58,6 @@ public class AndesiteContainerBlock extends Block implements EntityBlock, Tiered
         return InteractionResult.SUCCESS;
     }
 
-    // Wrench sneak+right-click quick-pickup (works in all modes, including creative)
     @Override
     protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         if (stack.is(AllItems.WRENCH.asItem()) && player.isShiftKeyDown()) {
@@ -78,7 +78,6 @@ public class AndesiteContainerBlock extends Block implements EntityBlock, Tiered
         return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
     }
 
-    // Drops the container with all its contents when broken by any means (survival/adventure/etc.)
     @Override
     public List<ItemStack> getDrops(BlockState state, LootParams.Builder builder) {
         BlockEntity be = builder.getOptionalParameter(net.minecraft.world.level.storage.loot.parameters.LootContextParams.BLOCK_ENTITY);
@@ -91,9 +90,8 @@ public class AndesiteContainerBlock extends Block implements EntityBlock, Tiered
         return List.of(new ItemStack(this.asItem()));
     }
 
-    // Creative mode drops the NBT item while still removing the block correctly
     @Override
-    public boolean onDestroyedByPlayer(BlockState state, Level level, BlockPos pos, Player player, boolean willHarvest, FluidState fluid) {
+    public boolean onDestroyedByPlayer(@NotNull BlockState state, Level level, @NotNull BlockPos pos, Player player, boolean willHarvest, FluidState fluid) {
         if (!level.isClientSide && player.isCreative()) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof TieredContainerBlockEntity tankBe) {

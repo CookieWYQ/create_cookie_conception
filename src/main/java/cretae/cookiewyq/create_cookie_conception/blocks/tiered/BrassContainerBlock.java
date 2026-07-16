@@ -9,7 +9,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.*;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.ItemInteractionResult;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
@@ -38,13 +37,11 @@ public class BrassContainerBlock extends Block implements EntityBlock, TieredCon
         return new TieredContainerBlockEntity(ModBlockEntities.TIERED_CONTAINER.get(), pos, state);
     }
 
-    // Allow empty-hand breaking to drop the block
     @Override
     public boolean canHarvestBlock(BlockState state, BlockGetter level, BlockPos pos, Player player) {
         return true;
     }
 
-    // Right-click with empty hand opens GUI
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof TieredContainerBlockEntity be) {
@@ -57,7 +54,6 @@ public class BrassContainerBlock extends Block implements EntityBlock, TieredCon
         return InteractionResult.SUCCESS;
     }
 
-    // Wrench sneak+right-click quick-pickup (works in all modes, including creative)
     @Override
     protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         if (stack.is(AllItems.WRENCH.asItem()) && player.isShiftKeyDown()) {
@@ -78,7 +74,6 @@ public class BrassContainerBlock extends Block implements EntityBlock, TieredCon
         return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
     }
 
-    // Drops the container with all its contents when broken by any means (survival/adventure/etc.)
     @Override
     public List<ItemStack> getDrops(BlockState state, LootParams.Builder builder) {
         BlockEntity be = builder.getOptionalParameter(net.minecraft.world.level.storage.loot.parameters.LootContextParams.BLOCK_ENTITY);
@@ -91,7 +86,6 @@ public class BrassContainerBlock extends Block implements EntityBlock, TieredCon
         return List.of(new ItemStack(this.asItem()));
     }
 
-    // Creative mode drops the NBT item while still removing the block correctly
     @Override
     public boolean onDestroyedByPlayer(BlockState state, Level level, BlockPos pos, Player player, boolean willHarvest, FluidState fluid) {
         if (!level.isClientSide && player.isCreative()) {

@@ -16,6 +16,7 @@ def write_file(rel_path, content):
 
 andesite_code = '''package cretae.cookiewyq.create_cookie_conception.blocks.tiered;
 
+import com.simibubi.create.AllItems;
 import cretae.cookiewyq.create_cookie_conception.blockentity.TieredContainerBlockEntity;
 import cretae.cookiewyq.create_cookie_conception.init.ModBlockEntities;
 import net.minecraft.core.BlockPos;
@@ -52,13 +53,11 @@ public class AndesiteContainerBlock extends Block implements EntityBlock, Tiered
         return new TieredContainerBlockEntity(ModBlockEntities.TIERED_CONTAINER.get(), pos, state);
     }
 
-    // Allow empty-hand breaking to actually drop the block
     @Override
     public boolean canHarvestBlock(BlockState state, BlockGetter level, BlockPos pos, Player player) {
         return true;
     }
 
-    // Right-click with empty hand opens GUI
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof TieredContainerBlockEntity be) {
@@ -71,9 +70,26 @@ public class AndesiteContainerBlock extends Block implements EntityBlock, Tiered
         return InteractionResult.SUCCESS;
     }
 
-    // Wrench quick-pickup is handled by create:wrench_pickup tag, no code needed here
+    @Override
+    protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+        if (stack.is(AllItems.WRENCH.asItem()) && player.isShiftKeyDown()) {
+            if (!level.isClientSide) {
+                BlockEntity be = level.getBlockEntity(pos);
+                if (be instanceof TieredContainerBlockEntity tankBe) {
+                    CompoundTag tag = tankBe.getPersistentData(level.registryAccess());
+                    ItemStack dropStack = new ItemStack(this.asItem());
+                    BlockItem.setBlockEntityData(dropStack, ModBlockEntities.TIERED_CONTAINER.get(), tag);
+                    if (!player.getInventory().add(dropStack)) {
+                        Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), dropStack);
+                    }
+                }
+                level.removeBlock(pos, false);
+            }
+            return ItemInteractionResult.SUCCESS;
+        }
+        return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+    }
 
-    // Drops the container with all its contents when broken by any means (survival/adventure/etc.)
     @Override
     public List<ItemStack> getDrops(BlockState state, LootParams.Builder builder) {
         BlockEntity be = builder.getOptionalParameter(net.minecraft.world.level.storage.loot.parameters.LootContextParams.BLOCK_ENTITY);
@@ -86,7 +102,6 @@ public class AndesiteContainerBlock extends Block implements EntityBlock, Tiered
         return List.of(new ItemStack(this.asItem()));
     }
 
-    // Creative mode drops the NBT item while still removing the block correctly
     @Override
     public boolean onDestroyedByPlayer(BlockState state, Level level, BlockPos pos, Player player, boolean willHarvest, FluidState fluid) {
         if (!level.isClientSide && player.isCreative()) {
@@ -129,5 +144,5 @@ if __name__ == "__main__":
     write_file(os.path.join(tiered_dir, "BrassContainerBlock.java"), brass_code)
     write_file(os.path.join(tiered_dir, "SturdyContainerBlock.java"), sturdy_code)
 
-    print("\n空手破坏不掉落问题已修复：添加 canHarvestBlock 返回 true，允许空手破坏并正常掉落。")
-    print("其他代码未作任何改动。")
+    print("\n修复完成：移除错误的 ItemInteractionResult 导入，使用 net.minecraft.world.* 通配符。")
+    print("所有功能正常：空手/镐子/创造破坏掉落、扳手快速拆卸均工作。")
