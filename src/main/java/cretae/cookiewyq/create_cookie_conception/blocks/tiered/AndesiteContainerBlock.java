@@ -3,9 +3,9 @@ package cretae.cookiewyq.create_cookie_conception.blocks.tiered;
 import com.simibubi.create.AllItems;
 import cretae.cookiewyq.create_cookie_conception.blockentity.TieredContainerBlockEntity;
 import cretae.cookiewyq.create_cookie_conception.init.ModBlockEntities;
-import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.*;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
@@ -20,24 +20,20 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.phys.BlockHitResult;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.List;
 
-@MethodsReturnNonnullByDefault
-@ParametersAreNonnullByDefault
 public class AndesiteContainerBlock extends Block implements EntityBlock, TieredContainerBlock {
     public AndesiteContainerBlock(BlockBehaviour.Properties properties) { super(properties); }
 
     @Override public int getInventorySlots() { return 54; }
-    @Override public int getFluidTankCount() { return 1; }
+    @Override public int getFluidTankCount() { return 3; }
     @Override public int getFluidTankCapacity() { return 32000; }
 
     @Nullable
     @Override
-    public BlockEntity newBlockEntity(@NotNull BlockPos pos, BlockState state) {
+    public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         return new TieredContainerBlockEntity(ModBlockEntities.TIERED_CONTAINER.get(), pos, state);
     }
 
@@ -49,10 +45,11 @@ public class AndesiteContainerBlock extends Block implements EntityBlock, Tiered
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof TieredContainerBlockEntity be) {
-            player.openMenu(be, buf -> {
+            ((ServerPlayer) player).openMenu(be, buf -> {
                 buf.writeBlockPos(pos);
                 buf.writeVarInt(be.getItemHandler().getSlots());
                 buf.writeVarInt(be.getFluidTanks().size());
+                buf.writeVarInt(be.getInputHandlers().size()); // tank count
             });
         }
         return InteractionResult.SUCCESS;
@@ -91,7 +88,7 @@ public class AndesiteContainerBlock extends Block implements EntityBlock, Tiered
     }
 
     @Override
-    public boolean onDestroyedByPlayer(@NotNull BlockState state, Level level, @NotNull BlockPos pos, Player player, boolean willHarvest, FluidState fluid) {
+    public boolean onDestroyedByPlayer(BlockState state, Level level, BlockPos pos, Player player, boolean willHarvest, FluidState fluid) {
         if (!level.isClientSide && player.isCreative()) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof TieredContainerBlockEntity tankBe) {

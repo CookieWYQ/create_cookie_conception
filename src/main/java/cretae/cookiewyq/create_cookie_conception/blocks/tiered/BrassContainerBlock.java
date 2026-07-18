@@ -28,7 +28,7 @@ public class BrassContainerBlock extends Block implements EntityBlock, TieredCon
     public BrassContainerBlock(BlockBehaviour.Properties properties) { super(properties); }
 
     @Override public int getInventorySlots() { return 108; }
-    @Override public int getFluidTankCount() { return 2; }
+    @Override public int getFluidTankCount() { return 4; }
     @Override public int getFluidTankCapacity() { return 64000; }
 
     @Nullable
@@ -49,6 +49,7 @@ public class BrassContainerBlock extends Block implements EntityBlock, TieredCon
                 buf.writeBlockPos(pos);
                 buf.writeVarInt(be.getItemHandler().getSlots());
                 buf.writeVarInt(be.getFluidTanks().size());
+                buf.writeVarInt(be.getInputHandlers().size()); // tank count
             });
         }
         return InteractionResult.SUCCESS;

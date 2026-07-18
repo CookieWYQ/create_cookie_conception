@@ -2,11 +2,10 @@ package cretae.cookiewyq.create_cookie_conception;
 
 import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonObject;
-import com.mojang.serialization.MapCodec;
-import com.mojang.serialization.codecs.RecordCodecBuilder;
 import cretae.cookiewyq.create_cookie_conception.model.TankDynamicBakedModel;
 import cretae.cookiewyq.create_cookie_conception.init.ModMenus;
 import cretae.cookiewyq.create_cookie_conception.screen.TieredContainerScreen;
+import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.renderer.block.model.ItemOverrides;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.BakedModel;
@@ -14,7 +13,6 @@ import net.minecraft.client.resources.model.Material;
 import net.minecraft.client.resources.model.ModelBaker;
 import net.minecraft.client.resources.model.ModelState;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.ItemStack;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -25,9 +23,12 @@ import net.neoforged.neoforge.client.model.geometry.IGeometryLoader;
 import net.neoforged.neoforge.client.model.geometry.IUnbakedGeometry;
 import org.jetbrains.annotations.NotNull;
 
+import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.Objects;
 import java.util.function.Function;
 
+@MethodsReturnNonnullByDefault
+@ParametersAreNonnullByDefault
 @EventBusSubscriber(modid = CookieConceptionMod.MODID, value = Dist.CLIENT)
 public class ClientModEvents {
 

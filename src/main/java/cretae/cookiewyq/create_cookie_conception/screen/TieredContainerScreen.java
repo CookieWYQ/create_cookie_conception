@@ -6,18 +6,22 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.alchemy.PotionContents;
 import net.neoforged.neoforge.client.extensions.common.IClientFluidTypeExtensions;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
-import org.jetbrains.annotations.NotNull;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.lang.reflect.Field;
+import java.util.*;
 
 public class TieredContainerScreen extends AbstractContainerScreen<TieredContainerMenu> {
     private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/container/generic_54.png");
@@ -25,8 +29,8 @@ public class TieredContainerScreen extends AbstractContainerScreen<TieredContain
     private static final int FLUID_BAR_WIDTH = 18;
     private static final int FLUID_BAR_HEIGHT = VISIBLE_ROWS * 18;
     private static final int FLUID_GAP = 2;
-    private boolean isDraggingScroll = false;
     private static final int TILE_SIZE = 16;
+    private boolean isDraggingScroll = false;
 
     private final Map<ResourceLocation, TextureAtlasSprite> spriteCache = new HashMap<>();
 
@@ -53,10 +57,21 @@ public class TieredContainerScreen extends AbstractContainerScreen<TieredContain
 
         for (int i = 0; i < tankCount; i++) {
             int x = startX + i * (FLUID_BAR_WIDTH + FLUID_GAP);
+            int slotY = startY + FLUID_BAR_HEIGHT + 4;
+            Slot inputSlot = menu.slots.get(i * 2);
+            setSlotPosition(inputSlot, x - leftPos + 1, slotY - topPos + 1);
+            Slot outputSlot = menu.slots.get(i * 2 + 1);
+            setSlotPosition(outputSlot, x - leftPos + 1, slotY + 20 - topPos + 1);
+        }
+
+        // ---------- 流体渲染部分，严禁修改 ----------
+        for (int i = 0; i < tankCount; i++) {
+            int x = startX + i * (FLUID_BAR_WIDTH + FLUID_GAP);
+            int y = startY;
             FluidTank tank = tanks.get(i);
             FluidStack fluid = tank.getFluid();
 
-            graphics.fill(x, startY, x + FLUID_BAR_WIDTH, startY + FLUID_BAR_HEIGHT, 0xFFFFFFFF);
+            graphics.fill(x, y, x + FLUID_BAR_WIDTH, y + FLUID_BAR_HEIGHT, 0xFFFFFFFF);
 
             if (fluid.isEmpty()) continue;
 
@@ -68,7 +83,7 @@ public class TieredContainerScreen extends AbstractContainerScreen<TieredContain
             if (fluidHeight <= 0) continue;
 
             boolean lighterThanAir = fluid.getFluidType().isLighterThanAir();
-            int drawY = lighterThanAir ? startY : startY + FLUID_BAR_HEIGHT - fluidHeight;
+            int drawY = lighterThanAir ? y : y + FLUID_BAR_HEIGHT - fluidHeight;
 
             IClientFluidTypeExtensions extensions = IClientFluidTypeExtensions.of(fluid.getFluid());
             ResourceLocation stillTexture = extensions.getStillTexture(fluid);
@@ -77,9 +92,7 @@ public class TieredContainerScreen extends AbstractContainerScreen<TieredContain
                     Minecraft.getInstance().getTextureAtlas(InventoryMenu.BLOCK_ATLAS).apply(loc)
             );
 
-            if (sprite == null) {
-                continue;
-            }
+            if (sprite == null) continue;
 
             int tintColor = extensions.getTintColor(fluid);
             float a = ((tintColor >> 24) & 0xFF) / 255.0F;
@@ -92,31 +105,64 @@ public class TieredContainerScreen extends AbstractContainerScreen<TieredContain
             RenderSystem.defaultBlendFunc();
             RenderSystem.setShaderColor(r, g, b, a);
 
-            //////
             int fullTiles = fluidHeight / TILE_SIZE;
             int remainingPixels = fluidHeight % TILE_SIZE;
 
-            // Draw full tiles from bottom to top
             for (int tile = 0; tile < fullTiles; tile++) {
                 int tileY = drawY + fluidHeight - (tile + 1) * TILE_SIZE;
                 graphics.blit(x, tileY, 0, FLUID_BAR_WIDTH, TILE_SIZE, sprite);
             }
 
-            // Draw partial top tile using scissor
             if (remainingPixels > 0) {
                 graphics.enableScissor(x, drawY, x + FLUID_BAR_WIDTH, drawY + remainingPixels);
                 graphics.blit(x, drawY, 0, FLUID_BAR_WIDTH, TILE_SIZE, sprite);
                 graphics.disableScissor();
             }
-            /////
-
-
 
             RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
             RenderSystem.disableBlend();
         }
+        // ---------- 以上为不可修改的流体渲染块 ----------
+
+        for (int i = 0; i < tankCount; i++) {
+            int x = startX + i * (FLUID_BAR_WIDTH + FLUID_GAP);
+            int inputY = startY + FLUID_BAR_HEIGHT + 4;
+            int outputY = inputY + 20;
+
+            graphics.fill(x, inputY, x + 18, inputY + 18, 0xFF404040);
+            graphics.renderOutline(x, inputY, 18, 18, 0xFFFFFFFF);
+            graphics.drawCenteredString(font, "I", x + 9, inputY + 5, 0xFFFFFF);
+
+            graphics.fill(x, outputY, x + 18, outputY + 18, 0xFF404040);
+            graphics.renderOutline(x, outputY, 18, 18, 0xFFFFFFFF);
+            graphics.drawCenteredString(font, "O", x + 9, outputY + 5, 0xFFFFFF);
+        }
 
         drawScrollBar(graphics);
+    }
+
+    private void setSlotPosition(Slot slot, int x, int y) {
+        try {
+            Field fX = Slot.class.getDeclaredField("x");
+            Field fY = Slot.class.getDeclaredField("y");
+            Field modifiers = Field.class.getDeclaredField("modifiers");
+            modifiers.setAccessible(true);
+            modifiers.setInt(fX, fX.getModifiers() & ~java.lang.reflect.Modifier.FINAL);
+            modifiers.setInt(fY, fY.getModifiers() & ~java.lang.reflect.Modifier.FINAL);
+            fX.setAccessible(true);
+            fY.setAccessible(true);
+            fX.setInt(slot, x);
+            fY.setInt(slot, y);
+        } catch (Exception e) {
+            try {
+                Field fX = Slot.class.getDeclaredField("x");
+                Field fY = Slot.class.getDeclaredField("y");
+                fX.setAccessible(true);
+                fY.setAccessible(true);
+                fX.setInt(slot, x);
+                fY.setInt(slot, y);
+            } catch (Exception ignored) {}
+        }
     }
 
     private void drawScrollBar(GuiGraphics graphics) {
@@ -136,13 +182,13 @@ public class TieredContainerScreen extends AbstractContainerScreen<TieredContain
     }
 
     @Override
-    public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
-        this.renderTooltip(graphics, mouseX, mouseY);
+        renderTooltip(graphics, mouseX, mouseY);
     }
 
     @Override
-    public void renderTooltip(@NotNull GuiGraphics graphics, int mouseX, int mouseY) {
+    protected void renderTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
         if (menu.getBlockEntity() != null) {
             List<FluidTank> tanks = menu.getBlockEntity().getFluidTanks();
             int tankCount = tanks.size();
@@ -155,11 +201,29 @@ public class TieredContainerScreen extends AbstractContainerScreen<TieredContain
                     FluidTank tank = tanks.get(i);
                     FluidStack fluid = tank.getFluid();
                     if (!fluid.isEmpty()) {
-                        String name = fluid.getHoverName().getString();
-                        Component text = Component.literal(name + ": " + fluid.getAmount() + " / " + tank.getCapacity() + " mB");
-                        graphics.renderTooltip(font, text, mouseX, mouseY);
+                        List<Component> lines = new ArrayList<>();
+
+                        String displayName = fluid.getHoverName().getString();
+                        PotionContents potionContents = fluid.get(DataComponents.POTION_CONTENTS);
+                        if (potionContents != null && !potionContents.equals(PotionContents.EMPTY)) {
+                            ItemStack dummyStack = new ItemStack(Items.POTION);
+                            dummyStack.set(DataComponents.POTION_CONTENTS, potionContents);
+                            displayName = dummyStack.getHoverName().getString();
+                        }
+                        lines.add(Component.literal(displayName + ": " + fluid.getAmount() + " / " + tank.getCapacity() + " mB"));
+
+                        if (potionContents != null && !potionContents.equals(PotionContents.EMPTY)) {
+                            for (MobEffectInstance effect : potionContents.getAllEffects()) {
+                                Component effectLine = Component.translatable(effect.getDescriptionId())
+                                        .append(" " + (effect.getAmplifier() + 1))
+                                        .append(" (" + effect.getDuration() / 20 + "s)");
+                                lines.add(effectLine);
+                            }
+                        }
+
+                        graphics.renderComponentTooltip(font, lines, mouseX, mouseY);
+                        return;
                     }
-                    break;
                 }
             }
         }

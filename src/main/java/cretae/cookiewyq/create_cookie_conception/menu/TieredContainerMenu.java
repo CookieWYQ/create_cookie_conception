@@ -10,12 +10,13 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerLevelAccess;
 import net.minecraft.world.inventory.Slot;
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.*;
+import net.neoforged.neoforge.fluids.FluidUtil;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.ItemStackHandler;
 import net.neoforged.neoforge.items.SlotItemHandler;
 
-import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.List;
 
 public class TieredContainerMenu extends AbstractContainerMenu {
@@ -24,19 +25,26 @@ public class TieredContainerMenu extends AbstractContainerMenu {
     private final IItemHandler itemHandler;
     private final Inventory playerInventory;
     private final int containerSlots;
+    private final int tankCount;
     private int scrollOffset = 0;
     private static final int VISIBLE_ROWS = 6;
+
+    private final List<SlotItemHandler> inputSlots = new ArrayList<>();
+    private final List<SlotItemHandler> outputSlots = new ArrayList<>();
 
     public TieredContainerMenu(int id, Inventory inv, FriendlyByteBuf extraData) {
         super(ModMenus.TIERED_CONTAINER.get(), id);
         this.pos = extraData.readBlockPos();
         int slots = extraData.readVarInt();
         int tanks = extraData.readVarInt();
+        this.tankCount = tanks;
         this.blockEntity = (TieredContainerBlockEntity) inv.player.level().getBlockEntity(pos);
         this.itemHandler = blockEntity != null ? blockEntity.getItemHandler() : new ItemStackHandler(slots);
         this.playerInventory = inv;
         this.containerSlots = itemHandler.getSlots();
-        updateSlotPositions(0);
+
+        addDedicatedSlots();
+        addMainSlots();
     }
 
     public TieredContainerMenu(int id, Inventory inv, TieredContainerBlockEntity be) {
@@ -46,20 +54,43 @@ public class TieredContainerMenu extends AbstractContainerMenu {
         this.itemHandler = be.getItemHandler();
         this.playerInventory = inv;
         this.containerSlots = itemHandler.getSlots();
-        updateSlotPositions(0);
+        this.tankCount = be.getFluidTanks().size();
+
+        addDedicatedSlots();
+        addMainSlots();
     }
 
-    public void updateSlotPositions(int offset) {
-        this.scrollOffset = Math.max(0, Math.min(offset, getMaxScrollOffset()));
-        this.slots.clear();
+    private void addDedicatedSlots() {
+        List<ItemStackHandler> inputs = blockEntity.getInputHandlers();
+        List<ItemStackHandler> outputs = blockEntity.getOutputHandlers();
+        for (int i = 0; i < tankCount; i++) {
+            // Input slot: fluid containers, potions, honey bottles
+            SlotItemHandler inputSlot = new SlotItemHandler(inputs.get(i), 0, 0, 0) {
+                @Override
+                public boolean mayPlace(ItemStack stack) {
+                    if (stack.isEmpty()) return true;
+                    if (FluidUtil.getFluidContained(stack).isPresent()) return true;
+                    return stack.getItem() instanceof PotionItem || stack.is(Items.HONEY_BOTTLE);
+                }
+            };
+            this.addSlot(inputSlot);
+            this.inputSlots.add(inputSlot);
 
-        try {
-            Field lastSlotsField = AbstractContainerMenu.class.getDeclaredField("lastSlots");
-            lastSlotsField.setAccessible(true);
-            List<ItemStack> lastSlots = (List<ItemStack>) lastSlotsField.get(this);
-            lastSlots.clear();
-        } catch (Exception ignored) {}
+            // Output slot: empty fluid containers, including empty glass bottles
+            SlotItemHandler outputSlot = new SlotItemHandler(outputs.get(i), 0, 0, 0) {
+                @Override
+                public boolean mayPlace(ItemStack stack) {
+                    if (stack.isEmpty()) return true;
+                    if (FluidUtil.getFluidContained(stack).isPresent()) return false;
+                    return FluidUtil.getFluidHandler(stack).isPresent() || stack.is(Items.GLASS_BOTTLE);
+                }
+            };
+            this.addSlot(outputSlot);
+            this.outputSlots.add(outputSlot);
+        }
+    }
 
+    private void addMainSlots() {
         int start = scrollOffset * 9;
         int end = Math.min(start + VISIBLE_ROWS * 9, containerSlots);
         for (int i = start; i < end; i++) {
@@ -78,6 +109,16 @@ public class TieredContainerMenu extends AbstractContainerMenu {
         }
     }
 
+    public void updateSlotPositions(int offset) {
+        this.scrollOffset = Math.max(0, Math.min(offset, getMaxScrollOffset()));
+        int dedicatedCount = tankCount * 2;
+        while (this.slots.size() > dedicatedCount) {
+            this.slots.remove(this.slots.size() - 1);
+        }
+        addMainSlots();
+    }
+
+    public int getTankCount() { return tankCount; }
     public int getScrollOffset() { return scrollOffset; }
     public int getMaxScrollOffset() {
         int totalRows = (containerSlots + 8) / 9;
@@ -94,13 +135,24 @@ public class TieredContainerMenu extends AbstractContainerMenu {
         if (slot.hasItem()) {
             ItemStack slotStack = slot.getItem();
             itemstack = slotStack.copy();
-            int containerSlots = this.slots.size() - 36;
-            if (index < containerSlots) {
-                if (!this.moveItemStackTo(slotStack, containerSlots, this.slots.size(), true))
+
+            int dedicatedSlots = tankCount * 2;
+            int firstMainSlot = dedicatedSlots;
+            int mainSlotCount = this.slots.size() - dedicatedSlots - 36;
+            int firstPlayerSlot = firstMainSlot + mainSlotCount;
+            int totalSlots = this.slots.size();
+
+            if (index < firstMainSlot) {
+                if (!this.moveItemStackTo(slotStack, firstPlayerSlot, totalSlots, true))
                     return ItemStack.EMPTY;
-            } else if (!this.moveItemStackTo(slotStack, 0, containerSlots, false)) {
-                return ItemStack.EMPTY;
+            } else if (index < firstPlayerSlot) {
+                if (!this.moveItemStackTo(slotStack, firstPlayerSlot, totalSlots, true))
+                    return ItemStack.EMPTY;
+            } else {
+                if (!this.moveItemStackTo(slotStack, firstMainSlot, firstPlayerSlot, false))
+                    return ItemStack.EMPTY;
             }
+
             if (slotStack.isEmpty()) slot.set(ItemStack.EMPTY);
             else slot.setChanged();
         }

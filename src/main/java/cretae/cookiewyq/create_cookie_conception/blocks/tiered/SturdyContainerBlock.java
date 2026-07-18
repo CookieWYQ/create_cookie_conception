@@ -28,7 +28,7 @@ public class SturdyContainerBlock extends Block implements EntityBlock, TieredCo
     public SturdyContainerBlock(BlockBehaviour.Properties properties) { super(properties); }
 
     @Override public int getInventorySlots() { return 162; }
-    @Override public int getFluidTankCount() { return 3; }
+    @Override public int getFluidTankCount() { return 5; }
     @Override public int getFluidTankCapacity() { return 128000; }
 
     @Nullable
@@ -49,6 +49,7 @@ public class SturdyContainerBlock extends Block implements EntityBlock, TieredCo
                 buf.writeBlockPos(pos);
                 buf.writeVarInt(be.getItemHandler().getSlots());
                 buf.writeVarInt(be.getFluidTanks().size());
+                buf.writeVarInt(be.getInputHandlers().size()); // tank count
             });
         }
         return InteractionResult.SUCCESS;
