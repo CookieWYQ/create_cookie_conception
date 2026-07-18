@@ -64,7 +64,7 @@ public class TieredContainerScreen extends AbstractContainerScreen<TieredContain
             setSlotPosition(outputSlot, x - leftPos + 1, slotY + 20 - topPos + 1);
         }
 
-        // ---------- 流体渲染部分，严禁修改 ----------
+        // ---------- Fluid rendering, DO NOT MODIFY ----------
         for (int i = 0; i < tankCount; i++) {
             int x = startX + i * (FLUID_BAR_WIDTH + FLUID_GAP);
             int y = startY;
@@ -122,7 +122,7 @@ public class TieredContainerScreen extends AbstractContainerScreen<TieredContain
             RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
             RenderSystem.disableBlend();
         }
-        // ---------- 以上为不可修改的流体渲染块 ----------
+        // ---------- End of fluid rendering block ----------
 
         for (int i = 0; i < tankCount; i++) {
             int x = startX + i * (FLUID_BAR_WIDTH + FLUID_GAP);
