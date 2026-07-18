@@ -1,10 +1,10 @@
 package cretae.cookiewyq.create_cookie_conception.blockentity;
 
 import cretae.cookiewyq.create_cookie_conception.blocks.tiered.TieredContainerBlock;
+import cretae.cookiewyq.create_cookie_conception.init.ModBlockEntities;
 import cretae.cookiewyq.create_cookie_conception.menu.TieredContainerMenu;
 import cretae.cookiewyq.create_cookie_conception.util.TankRenderInfo;
 import cretae.cookiewyq.create_cookie_conception.util.TankModelData;
-import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -15,7 +15,6 @@ import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.player.Inventory;
@@ -24,6 +23,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.*;
 import net.minecraft.world.item.alchemy.PotionContents;
 import net.minecraft.world.item.alchemy.Potions;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
@@ -44,15 +44,11 @@ import com.simibubi.create.content.fluids.potion.PotionFluid;
 import com.simibubi.create.content.fluids.potion.PotionFluidHandler;
 import net.createmod.catnip.data.Pair;
 
-import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Predicate;
 
-@ParametersAreNonnullByDefault
-@MethodsReturnNonnullByDefault
 public class TieredContainerBlockEntity extends BlockEntity implements MenuProvider {
     private ItemStackHandler itemHandler = new ItemStackHandler(0) {
         @Override
@@ -64,10 +60,10 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
     private final IFluidHandler fluidHandler = new MultiTankFluidHandler(fluidTanks);
     private final List<ItemStackHandler> inputHandlers = new ArrayList<>();
     private final List<ItemStackHandler> outputHandlers = new ArrayList<>();
-    private final List<TankRenderInfo> tankRenderInfos = new ArrayList<>();
+    private List<TankRenderInfo> tankRenderInfos = new ArrayList<>();
 
-    // Helper to compare potion effects
     private static boolean arePotionsEquivalent(PotionContents a, PotionContents b) {
+        if (a == null || b == null) return false;
         List<MobEffectInstance> effectsA = new ArrayList<>();
         for (MobEffectInstance e : a.getAllEffects()) effectsA.add(e);
         List<MobEffectInstance> effectsB = new ArrayList<>();
@@ -83,30 +79,25 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
         return true;
     }
 
-    // Check if an internal input item's fluid can go into the target tank
     private static boolean canInternalInputMerge(FluidTank tank, FluidStack toFill) {
         if (tank.getFluid().isEmpty()) return true;
         Fluid existingFluid = tank.getFluid().getFluid();
         Fluid incomingFluid = toFill.getFluid();
-        // Both must be water-based (water or potion fluid)
         if (!(existingFluid == Fluids.WATER || existingFluid instanceof PotionFluid) ||
             !(incomingFluid == Fluids.WATER || incomingFluid instanceof PotionFluid)) {
-            return existingFluid == incomingFluid; // strict match for non-water fluids (e.g., honey)
+            return existingFluid == incomingFluid;
         }
-        // If tank has plain water and incoming is potion, reject mixing
         if (existingFluid == Fluids.WATER && incomingFluid instanceof PotionFluid) return false;
         if (existingFluid instanceof PotionFluid && incomingFluid == Fluids.WATER) return false;
         if (existingFluid instanceof PotionFluid && incomingFluid instanceof PotionFluid) {
             PotionContents existingPotion = tank.getFluid().get(DataComponents.POTION_CONTENTS);
             PotionContents incomingPotion = toFill.get(DataComponents.POTION_CONTENTS);
-            if (existingPotion != null && incomingPotion != null) {
-                return arePotionsEquivalent(existingPotion, incomingPotion);
-            }
+            return arePotionsEquivalent(existingPotion, incomingPotion);
         }
-        return true;
+        return existingFluid == incomingFluid;
     }
 
-    // Custom tank that allows merging only strictly compatible fluids
+    // Custom tank that allows merging via forceMix parameter, with public trigger
     private static class TieredFluidTank extends FluidTank {
         public TieredFluidTank(int capacity, Predicate<FluidStack> validator) {
             super(capacity, validator);
@@ -117,7 +108,6 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
             if (this.fluid.isEmpty()) {
                 return fill(resource, action);
             }
-            // forceMix is true only for internal inputs that passed canInternalInputMerge check
             if (forceMix) {
                 int space = capacity - this.fluid.getAmount();
                 int amount = Math.min(space, resource.getAmount());
@@ -134,11 +124,15 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
                 }
                 return amount;
             }
-            // External fill: strict fluid type match
             if (this.fluid.getFluid() == resource.getFluid()) {
                 return fill(resource, action);
             }
             return 0;
+        }
+
+        // Public method to force trigger onContentsChanged externally
+        public void fireOnChanged() {
+            onContentsChanged();
         }
     }
 
@@ -233,17 +227,14 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
         if (stack.isEmpty()) return;
         if (isEmptyContainer(stack)) return;
 
-        // Handle potion items
         if (PotionFluidHandler.isPotionItem(stack)) {
             Pair<FluidStack, ItemStack> simEmpty = PotionFluidHandler.emptyPotion(stack.copy(), true);
             FluidStack potionFluid = simEmpty.getFirst();
             ItemStack emptyBottle = simEmpty.getSecond();
-
             if (!tank.isFluidValid(potionFluid)) return;
             if (!canInternalInputMerge(tank, potionFluid)) return;
             int space = tank.getCapacity() - tank.getFluidAmount();
             if (space < potionFluid.getAmount()) return;
-
             Pair<FluidStack, ItemStack> execEmpty = PotionFluidHandler.emptyPotion(stack.copy(), false);
             FluidStack execFluid = execEmpty.getFirst();
             ItemStack execBottle = execEmpty.getSecond();
@@ -256,12 +247,40 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
             if (filled > 0) {
                 input.setStackInSlot(0, ItemStack.EMPTY);
                 input.setStackInSlot(0, execBottle);
-                this.onContentsChanged();
             }
             return;
         }
 
-        // Standard fluid containers
+        if (stack.is(Items.HONEY_BOTTLE)) {
+            Fluid honeyFluid = BuiltInRegistries.FLUID.get(ResourceLocation.withDefaultNamespace("honey"));
+            if (honeyFluid == null || honeyFluid == Fluids.EMPTY) {
+                for (Fluid f : BuiltInRegistries.FLUID) {
+                    if (BuiltInRegistries.FLUID.getKey(f).getPath().contains("honey")) {
+                        honeyFluid = f;
+                        break;
+                    }
+                }
+                if (honeyFluid == Fluids.EMPTY) return;
+            }
+            FluidStack fluidToFill = new FluidStack(honeyFluid, 250);
+            ItemStack emptyBottle = new ItemStack(Items.GLASS_BOTTLE);
+            if (!tank.isFluidValid(fluidToFill)) return;
+            if (!canInternalInputMerge(tank, fluidToFill)) return;
+            int space = tank.getCapacity() - tank.getFluidAmount();
+            if (space < fluidToFill.getAmount()) return;
+            int filled;
+            if (tank instanceof TieredFluidTank tf) {
+                filled = tf.mergeFluid(fluidToFill, IFluidHandler.FluidAction.EXECUTE, true);
+            } else {
+                filled = tank.fill(fluidToFill, IFluidHandler.FluidAction.EXECUTE);
+            }
+            if (filled > 0) {
+                input.setStackInSlot(0, ItemStack.EMPTY);
+                input.setStackInSlot(0, emptyBottle);
+            }
+            return;
+        }
+
         Optional<FluidStack> containedOpt = FluidUtil.getFluidContained(stack);
         if (containedOpt.isPresent()) {
             FluidStack fluidToFill = containedOpt.get().copy();
@@ -276,12 +295,10 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
                     return;
                 }
             }
-
             if (!tank.isFluidValid(fluidToFill)) return;
             if (!canInternalInputMerge(tank, fluidToFill)) return;
             int space = tank.getCapacity() - tank.getFluidAmount();
             if (space < fluidToFill.getAmount()) return;
-
             int filled;
             if (tank instanceof TieredFluidTank tf) {
                 filled = tf.mergeFluid(fluidToFill, IFluidHandler.FluidAction.EXECUTE, true);
@@ -291,41 +308,6 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
             if (filled > 0) {
                 input.setStackInSlot(0, ItemStack.EMPTY);
                 input.setStackInSlot(0, emptyResult);
-                this.onContentsChanged();
-            }
-            return;
-        }
-
-        // Honey bottle
-        if (stack.is(Items.HONEY_BOTTLE)) {
-            Fluid honeyFluid = BuiltInRegistries.FLUID.get(ResourceLocation.withDefaultNamespace("honey"));
-            if (honeyFluid == Fluids.EMPTY) {
-                for (Fluid f : BuiltInRegistries.FLUID) {
-                    if (BuiltInRegistries.FLUID.getKey(f).getPath().contains("honey")) {
-                        honeyFluid = f;
-                        break;
-                    }
-                }
-                if (honeyFluid == Fluids.EMPTY) return;
-            }
-            FluidStack fluidToFill = new FluidStack(honeyFluid, 250);
-            ItemStack emptyResult = new ItemStack(Items.GLASS_BOTTLE);
-
-            if (!tank.isFluidValid(fluidToFill)) return;
-            if (!canInternalInputMerge(tank, fluidToFill)) return;
-            int space = tank.getCapacity() - tank.getFluidAmount();
-            if (space < fluidToFill.getAmount()) return;
-
-            int filled;
-            if (tank instanceof TieredFluidTank tf) {
-                filled = tf.mergeFluid(fluidToFill, IFluidHandler.FluidAction.EXECUTE, true);
-            } else {
-                filled = tank.fill(fluidToFill, IFluidHandler.FluidAction.EXECUTE);
-            }
-            if (filled > 0) {
-                input.setStackInSlot(0, ItemStack.EMPTY);
-                input.setStackInSlot(0, emptyResult);
-                this.onContentsChanged();
             }
         }
     }
@@ -359,18 +341,16 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
                     tank.drain(250, IFluidHandler.FluidAction.EXECUTE);
                     ItemStack filled = PotionFluidHandler.fillBottle(stack, drained);
                     output.setStackInSlot(0, filled);
-                    this.onContentsChanged();
                 }
                 return;
             }
 
             ResourceLocation fluidName = BuiltInRegistries.FLUID.getKey(tankFluid.getFluid());
-            if (fluidName.getPath().contains("honey")) {
+            if (fluidName != null && fluidName.getPath().contains("honey")) {
                 FluidStack drained = tank.drain(250, IFluidHandler.FluidAction.SIMULATE);
                 if (drained.getAmount() == 250) {
                     tank.drain(250, IFluidHandler.FluidAction.EXECUTE);
                     output.setStackInSlot(0, new ItemStack(Items.HONEY_BOTTLE));
-                    this.onContentsChanged();
                 }
                 return;
             }
@@ -380,7 +360,6 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
                 if (drained.getAmount() == 250) {
                     tank.drain(250, IFluidHandler.FluidAction.EXECUTE);
                     output.setStackInSlot(0, PotionContents.createItemStack(Items.POTION, Potions.WATER));
-                    this.onContentsChanged();
                 }
                 return;
             }
@@ -391,7 +370,6 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
             FluidActionResult result = FluidUtil.tryFillContainer(stack, tank, Integer.MAX_VALUE, null, true);
             if (result.isSuccess()) {
                 output.setStackInSlot(0, result.getResult());
-                this.onContentsChanged();
             }
         }
     }
@@ -430,7 +408,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
     @Override
     public @NotNull ModelData getModelData() {
         if (tankRenderInfos.isEmpty()) return ModelData.EMPTY;
-        return ModelData.builder().with(TankModelData.TANK_RENDER_INFO, tankRenderInfos.getFirst()).build();
+        return ModelData.builder().with(TankModelData.TANK_RENDER_INFO, tankRenderInfos.get(0)).build();
     }
 
     @Override
@@ -535,10 +513,8 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
     @Override public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket pkt, HolderLookup.Provider reg) {
         loadAdditional(pkt.getTag(), reg);
         if (level != null && level.isClientSide) {
-            Minecraft.getInstance().execute(() -> {
-                requestModelDataUpdate();
-                level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
-            });
+            requestModelDataUpdate();
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
         }
     }
 
@@ -548,18 +524,8 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
         if (level != null) {
             if (!level.isClientSide) {
                 level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
-                if (level.getServer() != null) {
-                    for (ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
-                        if (player.distanceToSqr(worldPosition.getX() + 0.5, worldPosition.getY() + 0.5, worldPosition.getZ() + 0.5) <= 64 * 64) {
-                            player.connection.send(Objects.requireNonNull(getUpdatePacket()));
-                        }
-                    }
-                }
             } else {
-                Minecraft.getInstance().execute(() -> {
-                    requestModelDataUpdate();
-                    level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
-                });
+                requestModelDataUpdate();
             }
         }
     }
@@ -600,7 +566,11 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
                         if (resource.has(AllDataComponents.POTION_FLUID_BOTTLE_TYPE)) {
                             existing.set(AllDataComponents.POTION_FLUID_BOTTLE_TYPE, resource.get(AllDataComponents.POTION_FLUID_BOTTLE_TYPE));
                         }
-                        tank.fill(FluidStack.EMPTY, FluidAction.EXECUTE);
+                        if (tank instanceof TieredFluidTank tf) {
+                            tf.fireOnChanged();
+                        } else {
+                            tank.fill(FluidStack.EMPTY, FluidAction.EXECUTE);
+                        }
                     }
                     return amount;
                 }
@@ -611,7 +581,6 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
         @Override
         public int fill(FluidStack resource, FluidAction action) {
             if (resource.isEmpty()) return 0;
-            // External fill: strict matching
             for (int i = 0; i < tanks.size(); i++) {
                 FluidTank tank = tanks.get(i);
                 if (!tank.getFluid().isEmpty() && tank.getFluid().getFluid() == resource.getFluid()) {
