@@ -107,15 +107,15 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
             !(incomingFluid == Fluids.WATER || incomingFluid instanceof PotionFluid)) {
             return existingFluid == incomingFluid; // strict match for non-water fluids (e.g., honey)
         }
-        // If tank has plain water and incoming is potion, accept only if tank is empty? No, we want to reject mixing.
-        // So they must be exactly the same type (both water or both potion with identical effects)
-        if (existingFluid == Fluids.WATER && incomingFluid == Fluids.WATER) return true;
+        // If tank has plain water and incoming is potion, reject mixing
+        if (existingFluid == Fluids.WATER && incomingFluid instanceof PotionFluid) return false;
+        if (existingFluid instanceof PotionFluid && incomingFluid == Fluids.WATER) return false;
         if (existingFluid instanceof PotionFluid && incomingFluid instanceof PotionFluid) {
             PotionContents existingPotion = tank.getFluid().get(DataComponents.POTION_CONTENTS);
             PotionContents incomingPotion = toFill.get(DataComponents.POTION_CONTENTS);
             return arePotionsEquivalent(existingPotion, incomingPotion);
         }
-        return false;
+        return existingFluid == incomingFluid;
     }
 
     // Custom tank that allows merging only strictly compatible fluids
@@ -665,4 +665,4 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
 
 if __name__ == "__main__":
     write_file(os.path.join(PACKAGE_PATH, "blockentity", "TieredContainerBlockEntity.java"), blockentity_code)
-    print("\n内部输入严格区分流体，药水与水不再混合，纹理实时刷新。")
+    print("\n编译错误修复，纹理更新逻辑完整保留。")

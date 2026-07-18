@@ -1,10 +1,10 @@
 package cretae.cookiewyq.create_cookie_conception.blockentity;
 
 import cretae.cookiewyq.create_cookie_conception.blocks.tiered.TieredContainerBlock;
-import cretae.cookiewyq.create_cookie_conception.init.ModBlockEntities;
 import cretae.cookiewyq.create_cookie_conception.menu.TieredContainerMenu;
 import cretae.cookiewyq.create_cookie_conception.util.TankRenderInfo;
 import cretae.cookiewyq.create_cookie_conception.util.TankModelData;
+import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -24,7 +24,6 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.*;
 import net.minecraft.world.item.alchemy.PotionContents;
 import net.minecraft.world.item.alchemy.Potions;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
@@ -45,11 +44,15 @@ import com.simibubi.create.content.fluids.potion.PotionFluid;
 import com.simibubi.create.content.fluids.potion.PotionFluidHandler;
 import net.createmod.catnip.data.Pair;
 
+import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Predicate;
 
+@ParametersAreNonnullByDefault
+@MethodsReturnNonnullByDefault
 public class TieredContainerBlockEntity extends BlockEntity implements MenuProvider {
     private ItemStackHandler itemHandler = new ItemStackHandler(0) {
         @Override
@@ -61,11 +64,10 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
     private final IFluidHandler fluidHandler = new MultiTankFluidHandler(fluidTanks);
     private final List<ItemStackHandler> inputHandlers = new ArrayList<>();
     private final List<ItemStackHandler> outputHandlers = new ArrayList<>();
-    private List<TankRenderInfo> tankRenderInfos = new ArrayList<>();
+    private final List<TankRenderInfo> tankRenderInfos = new ArrayList<>();
 
     // Helper to compare potion effects
     private static boolean arePotionsEquivalent(PotionContents a, PotionContents b) {
-        if (a == null || b == null) return false;
         List<MobEffectInstance> effectsA = new ArrayList<>();
         for (MobEffectInstance e : a.getAllEffects()) effectsA.add(e);
         List<MobEffectInstance> effectsB = new ArrayList<>();
@@ -91,15 +93,17 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
             !(incomingFluid == Fluids.WATER || incomingFluid instanceof PotionFluid)) {
             return existingFluid == incomingFluid; // strict match for non-water fluids (e.g., honey)
         }
-        // If tank has plain water and incoming is potion, accept only if tank is empty? No, we want to reject mixing.
-        // So they must be exactly the same type (both water or both potion with identical effects)
-        if (existingFluid == Fluids.WATER && incomingFluid == Fluids.WATER) return true;
+        // If tank has plain water and incoming is potion, reject mixing
+        if (existingFluid == Fluids.WATER && incomingFluid instanceof PotionFluid) return false;
+        if (existingFluid instanceof PotionFluid && incomingFluid == Fluids.WATER) return false;
         if (existingFluid instanceof PotionFluid && incomingFluid instanceof PotionFluid) {
             PotionContents existingPotion = tank.getFluid().get(DataComponents.POTION_CONTENTS);
             PotionContents incomingPotion = toFill.get(DataComponents.POTION_CONTENTS);
-            return arePotionsEquivalent(existingPotion, incomingPotion);
+            if (existingPotion != null && incomingPotion != null) {
+                return arePotionsEquivalent(existingPotion, incomingPotion);
+            }
         }
-        return false;
+        return true;
     }
 
     // Custom tank that allows merging only strictly compatible fluids
@@ -295,7 +299,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
         // Honey bottle
         if (stack.is(Items.HONEY_BOTTLE)) {
             Fluid honeyFluid = BuiltInRegistries.FLUID.get(ResourceLocation.withDefaultNamespace("honey"));
-            if (honeyFluid == null || honeyFluid == Fluids.EMPTY) {
+            if (honeyFluid == Fluids.EMPTY) {
                 for (Fluid f : BuiltInRegistries.FLUID) {
                     if (BuiltInRegistries.FLUID.getKey(f).getPath().contains("honey")) {
                         honeyFluid = f;
@@ -361,7 +365,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
             }
 
             ResourceLocation fluidName = BuiltInRegistries.FLUID.getKey(tankFluid.getFluid());
-            if (fluidName != null && fluidName.getPath().contains("honey")) {
+            if (fluidName.getPath().contains("honey")) {
                 FluidStack drained = tank.drain(250, IFluidHandler.FluidAction.SIMULATE);
                 if (drained.getAmount() == 250) {
                     tank.drain(250, IFluidHandler.FluidAction.EXECUTE);
@@ -426,7 +430,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
     @Override
     public @NotNull ModelData getModelData() {
         if (tankRenderInfos.isEmpty()) return ModelData.EMPTY;
-        return ModelData.builder().with(TankModelData.TANK_RENDER_INFO, tankRenderInfos.get(0)).build();
+        return ModelData.builder().with(TankModelData.TANK_RENDER_INFO, tankRenderInfos.getFirst()).build();
     }
 
     @Override
@@ -547,7 +551,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
                 if (level.getServer() != null) {
                     for (ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
                         if (player.distanceToSqr(worldPosition.getX() + 0.5, worldPosition.getY() + 0.5, worldPosition.getZ() + 0.5) <= 64 * 64) {
-                            player.connection.send(getUpdatePacket());
+                            player.connection.send(Objects.requireNonNull(getUpdatePacket()));
                         }
                     }
                 }
