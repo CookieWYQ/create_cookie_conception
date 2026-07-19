@@ -5,14 +5,27 @@ import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 JAVA_SRC = os.path.join(BASE_DIR, "src", "main", "java")
+RESOURCES = os.path.join(BASE_DIR, "src", "main", "resources")
 PACKAGE_PATH = os.path.join("cretae", "cookiewyq", "create_cookie_conception")
 
 def write_file(rel_path, content):
-    full_path = os.path.join(JAVA_SRC, rel_path)
+    full_path = os.path.join(JAVA_SRC, rel_path) if rel_path.endswith(".java") else os.path.join(BASE_DIR, rel_path)
     os.makedirs(os.path.dirname(full_path), exist_ok=True)
     with open(full_path, "w", encoding="utf-8") as f:
         f.write(content)
     print(f"[生成] {full_path}")
+
+# ==================== TankModelData.java ====================
+tank_model_data = '''package cretae.cookiewyq.create_cookie_conception.util;
+
+import net.neoforged.neoforge.client.model.data.ModelProperty;
+
+import java.util.List;
+
+public class TankModelData {
+    public static final ModelProperty<List<TankRenderInfo>> TANK_RENDER_INFO_LIST = new ModelProperty<>();
+}
+'''
 
 # ==================== TieredContainerBlockEntity.java ====================
 blockentity_code = '''package cretae.cookiewyq.create_cookie_conception.blockentity;
@@ -22,7 +35,6 @@ import cretae.cookiewyq.create_cookie_conception.init.ModBlockEntities;
 import cretae.cookiewyq.create_cookie_conception.menu.TieredContainerMenu;
 import cretae.cookiewyq.create_cookie_conception.util.TankRenderInfo;
 import cretae.cookiewyq.create_cookie_conception.util.TankModelData;
-import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;
@@ -32,6 +44,7 @@ import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.player.Inventory;
@@ -79,6 +92,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
     private final List<ItemStackHandler> outputHandlers = new ArrayList<>();
     private List<TankRenderInfo> tankRenderInfos = new ArrayList<>();
 
+    // Helper to compare potion effects
     private static boolean arePotionsEquivalent(PotionContents a, PotionContents b) {
         if (a == null || b == null) return false;
         List<MobEffectInstance> effectsA = new ArrayList<>();
@@ -96,6 +110,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
         return true;
     }
 
+    // Internal input check: potion cannot go into water, water cannot go into potion
     private static boolean canInternalInputMerge(FluidTank tank, FluidStack toFill) {
         if (tank.getFluid().isEmpty()) return true;
         Fluid existingFluid = tank.getFluid().getFluid();
@@ -114,7 +129,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
         return existingFluid == incomingFluid;
     }
 
-    // Custom tank that allows merging via forceMix parameter, with public trigger
+    // Custom tank that supports forced mixing
     private static class TieredFluidTank extends FluidTank {
         public TieredFluidTank(int capacity, Predicate<FluidStack> validator) {
             super(capacity, validator);
@@ -147,7 +162,6 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
             return 0;
         }
 
-        // Public method to force trigger onContentsChanged externally
         public void fireOnChanged() {
             onContentsChanged();
         }
@@ -425,7 +439,9 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
     @Override
     public @NotNull ModelData getModelData() {
         if (tankRenderInfos.isEmpty()) return ModelData.EMPTY;
-        return ModelData.builder().with(TankModelData.TANK_RENDER_INFO, tankRenderInfos.get(0)).build();
+        return ModelData.builder()
+                .with(TankModelData.TANK_RENDER_INFO_LIST, tankRenderInfos)
+                .build();
     }
 
     @Override
@@ -530,8 +546,8 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
     @Override public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket pkt, HolderLookup.Provider reg) {
         loadAdditional(pkt.getTag(), reg);
         if (level != null && level.isClientSide) {
+            updateRenderInfo();
             requestModelDataUpdate();
-            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
         }
     }
 
@@ -541,7 +557,13 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
         if (level != null) {
             if (!level.isClientSide) {
                 level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+                for (ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
+                    if (player.distanceToSqr(worldPosition.getX() + 0.5, worldPosition.getY() + 0.5, worldPosition.getZ() + 0.5) <= 64 * 64) {
+                        player.connection.send(getUpdatePacket());
+                    }
+                }
             } else {
+                updateRenderInfo();
                 requestModelDataUpdate();
             }
         }
@@ -598,18 +620,15 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
         @Override
         public int fill(FluidStack resource, FluidAction action) {
             if (resource.isEmpty()) return 0;
+            // External fill: strict fluid type match, potion and water are different
             for (int i = 0; i < tanks.size(); i++) {
                 FluidTank tank = tanks.get(i);
                 if (!tank.getFluid().isEmpty() && tank.getFluid().getFluid() == resource.getFluid()) {
-                    int filled = fillTank(i, resource, action, false);
-                    if (filled > 0) return filled;
-                }
-            }
-            for (int i = 0; i < tanks.size(); i++) {
-                FluidTank tank = tanks.get(i);
-                if (tank.getFluid().isEmpty()) {
                     return fillTank(i, resource, action, false);
                 }
+            }
+            for (FluidTank tank : tanks) {
+                if (tank.getFluid().isEmpty()) return tank.fill(resource, action);
             }
             return 0;
         }
@@ -637,293 +656,265 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
 }
 '''
 
-# ==================== TieredContainerScreen.java ====================
-screen_code = '''package cretae.cookiewyq.create_cookie_conception.screen;
+# ==================== TankDynamicBakedModel.java ====================
+dynamic_model_code = '''package cretae.cookiewyq.create_cookie_conception.model;
 
-import cretae.cookiewyq.create_cookie_conception.menu.TieredContainerMenu;
-import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.PoseStack;
+import cretae.cookiewyq.create_cookie_conception.util.TankRenderInfo;
+import cretae.cookiewyq.create_cookie_conception.util.TankModelData;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.block.model.BakedQuad;
+import net.minecraft.client.renderer.block.model.ItemOverrides;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.core.Direction;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.inventory.InventoryMenu;
-import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.item.alchemy.PotionContents;
+import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.client.ChunkRenderTypeSet;
 import net.neoforged.neoforge.client.extensions.common.IClientFluidTypeExtensions;
+import net.neoforged.neoforge.client.model.IDynamicBakedModel;
+import net.neoforged.neoforge.client.model.data.ModelData;
+import net.neoforged.neoforge.client.model.pipeline.QuadBakingVertexConsumer;
 import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.capability.templates.FluidTank;
+import org.jetbrains.annotations.Nullable;
 
-import java.lang.reflect.Field;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 
-public class TieredContainerScreen extends AbstractContainerScreen<TieredContainerMenu> {
-    private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/container/generic_54.png");
-    private static final int VISIBLE_ROWS = 6;
-    private static final int FLUID_BAR_WIDTH = 18;
-    private static final int FLUID_BAR_HEIGHT = VISIBLE_ROWS * 18;
-    private static final int FLUID_GAP = 2;
-    private static final int TILE_SIZE = 16;
-    private boolean isDraggingScroll = false;
+public class TankDynamicBakedModel implements IDynamicBakedModel {
+    private final BakedModel baseModel;
+    private final int tankCount;
 
-    private final Map<ResourceLocation, TextureAtlasSprite> spriteCache = new HashMap<>();
-
-    public TieredContainerScreen(TieredContainerMenu menu, Inventory inv, Component title) {
-        super(menu, inv, title);
-        this.imageWidth = 176;
-        this.imageHeight = 222;
-        this.inventoryLabelY = this.imageHeight - 94;
+    public TankDynamicBakedModel(BakedModel baseModel, int tankCount) {
+        this.baseModel = baseModel;
+        this.tankCount = tankCount;
     }
 
     @Override
-    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
-        RenderSystem.setShaderTexture(0, TEXTURE);
-        graphics.blit(TEXTURE, leftPos, topPos, 0, 0, imageWidth, imageHeight);
-
-        if (menu.getBlockEntity() == null) return;
-        List<FluidTank> tanks = menu.getBlockEntity().getFluidTanks();
-        int tankCount = tanks.size();
-        if (tankCount == 0) return;
-
-        int totalWidth = tankCount * FLUID_BAR_WIDTH + (tankCount - 1) * FLUID_GAP;
-        int startX = leftPos - totalWidth;
-        int startY = topPos + 18;
-
-        for (int i = 0; i < tankCount; i++) {
-            int x = startX + i * (FLUID_BAR_WIDTH + FLUID_GAP);
-            int slotY = startY + FLUID_BAR_HEIGHT + 4;
-            Slot inputSlot = menu.slots.get(i * 2);
-            setSlotPosition(inputSlot, x - leftPos + 1, slotY - topPos + 1);
-            Slot outputSlot = menu.slots.get(i * 2 + 1);
-            setSlotPosition(outputSlot, x - leftPos + 1, slotY + 20 - topPos + 1);
-        }
-
-        // ---------- Fluid rendering, DO NOT MODIFY ----------
-        for (int i = 0; i < tankCount; i++) {
-            int x = startX + i * (FLUID_BAR_WIDTH + FLUID_GAP);
-            int y = startY;
-            FluidTank tank = tanks.get(i);
-            FluidStack fluid = tank.getFluid();
-
-            graphics.fill(x, y, x + FLUID_BAR_WIDTH, y + FLUID_BAR_HEIGHT, 0xFFFFFFFF);
-
-            if (fluid.isEmpty()) continue;
-
-            int capacity = tank.getCapacity();
-            int amount = fluid.getAmount();
-            if (amount <= 0) continue;
-
-            int fluidHeight = (int) (FLUID_BAR_HEIGHT * ((float) amount / capacity));
-            if (fluidHeight <= 0) continue;
-
-            boolean lighterThanAir = fluid.getFluidType().isLighterThanAir();
-            int drawY = lighterThanAir ? y : y + FLUID_BAR_HEIGHT - fluidHeight;
-
-            IClientFluidTypeExtensions extensions = IClientFluidTypeExtensions.of(fluid.getFluid());
-            ResourceLocation stillTexture = extensions.getStillTexture(fluid);
-
-            TextureAtlasSprite sprite = spriteCache.computeIfAbsent(stillTexture, loc ->
-                    Minecraft.getInstance().getTextureAtlas(InventoryMenu.BLOCK_ATLAS).apply(loc)
-            );
-
-            if (sprite == null) continue;
-
-            int tintColor = extensions.getTintColor(fluid);
-            float a = ((tintColor >> 24) & 0xFF) / 255.0F;
-            float r = ((tintColor >> 16) & 0xFF) / 255.0F;
-            float g = ((tintColor >> 8) & 0xFF) / 255.0F;
-            float b = (tintColor & 0xFF) / 255.0F;
-
-            RenderSystem.setShaderTexture(0, InventoryMenu.BLOCK_ATLAS);
-            RenderSystem.enableBlend();
-            RenderSystem.defaultBlendFunc();
-            RenderSystem.setShaderColor(r, g, b, a);
-
-            int fullTiles = fluidHeight / TILE_SIZE;
-            int remainingPixels = fluidHeight % TILE_SIZE;
-
-            for (int tile = 0; tile < fullTiles; tile++) {
-                int tileY = drawY + fluidHeight - (tile + 1) * TILE_SIZE;
-                graphics.blit(x, tileY, 0, FLUID_BAR_WIDTH, TILE_SIZE, sprite);
-            }
-
-            if (remainingPixels > 0) {
-                graphics.enableScissor(x, drawY, x + FLUID_BAR_WIDTH, drawY + remainingPixels);
-                graphics.blit(x, drawY, 0, FLUID_BAR_WIDTH, TILE_SIZE, sprite);
-                graphics.disableScissor();
-            }
-
-            RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-            RenderSystem.disableBlend();
-        }
-        // ---------- End of fluid rendering block ----------
-
-        for (int i = 0; i < tankCount; i++) {
-            int x = startX + i * (FLUID_BAR_WIDTH + FLUID_GAP);
-            int inputY = startY + FLUID_BAR_HEIGHT + 4;
-            int outputY = inputY + 20;
-
-            graphics.fill(x, inputY, x + 18, inputY + 18, 0xFF404040);
-            graphics.renderOutline(x, inputY, 18, 18, 0xFFFFFFFF);
-            graphics.drawCenteredString(font, "I", x + 9, inputY + 5, 0xFFFFFF);
-
-            graphics.fill(x, outputY, x + 18, outputY + 18, 0xFF404040);
-            graphics.renderOutline(x, outputY, 18, 18, 0xFFFFFFFF);
-            graphics.drawCenteredString(font, "O", x + 9, outputY + 5, 0xFFFFFF);
-        }
-
-        drawScrollBar(graphics);
-    }
-
-    private void setSlotPosition(Slot slot, int x, int y) {
-        try {
-            Field fX = Slot.class.getDeclaredField("x");
-            Field fY = Slot.class.getDeclaredField("y");
-            Field modifiers = Field.class.getDeclaredField("modifiers");
-            modifiers.setAccessible(true);
-            modifiers.setInt(fX, fX.getModifiers() & ~java.lang.reflect.Modifier.FINAL);
-            modifiers.setInt(fY, fY.getModifiers() & ~java.lang.reflect.Modifier.FINAL);
-            fX.setAccessible(true);
-            fY.setAccessible(true);
-            fX.setInt(slot, x);
-            fY.setInt(slot, y);
-        } catch (Exception e) {
-            try {
-                Field fX = Slot.class.getDeclaredField("x");
-                Field fY = Slot.class.getDeclaredField("y");
-                fX.setAccessible(true);
-                fY.setAccessible(true);
-                fX.setInt(slot, x);
-                fY.setInt(slot, y);
-            } catch (Exception ignored) {}
-        }
-    }
-
-    private void drawScrollBar(GuiGraphics graphics) {
-        int maxOffset = menu.getMaxScrollOffset();
-        if (maxOffset <= 0) return;
-
-        int barX = leftPos + imageWidth + 4;
-        int barY = topPos + 18;
-        int barHeight = VISIBLE_ROWS * 18;
-        int totalRows = (menu.getBlockEntity().getItemHandler().getSlots() + 8) / 9;
-
-        graphics.fill(barX, barY, barX + 8, barY + barHeight, 0x40000000);
-        float ratio = menu.getScrollOffset() / (float) maxOffset;
-        int sliderHeight = Math.max(8, barHeight / Math.max(1, totalRows));
-        int sliderY = barY + (int) (ratio * (barHeight - sliderHeight));
-        graphics.fill(barX, sliderY, barX + 8, sliderY + sliderHeight, 0xFFAAAAAA);
-    }
-
-    @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        super.render(graphics, mouseX, mouseY, partialTick);
-        renderTooltip(graphics, mouseX, mouseY);
-    }
-
-    @Override
-    protected void renderTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
-        if (menu.getBlockEntity() != null) {
-            List<FluidTank> tanks = menu.getBlockEntity().getFluidTanks();
-            int tankCount = tanks.size();
-            int totalWidth = tankCount * FLUID_BAR_WIDTH + (tankCount - 1) * FLUID_GAP;
-            int startX = leftPos - totalWidth;
-            int startY = topPos + 18;
-            for (int i = 0; i < tankCount; i++) {
-                int x = startX + i * (FLUID_BAR_WIDTH + FLUID_GAP);
-                if (mouseX >= x && mouseX < x + FLUID_BAR_WIDTH && mouseY >= startY && mouseY < startY + FLUID_BAR_HEIGHT) {
-                    FluidTank tank = tanks.get(i);
-                    FluidStack fluid = tank.getFluid();
-                    if (!fluid.isEmpty()) {
-                        List<Component> lines = new ArrayList<>();
-
-                        String displayName = fluid.getHoverName().getString();
-                        PotionContents potionContents = fluid.get(DataComponents.POTION_CONTENTS);
-                        if (potionContents != null && !potionContents.equals(PotionContents.EMPTY)) {
-                            ItemStack dummyStack = new ItemStack(Items.POTION);
-                            dummyStack.set(DataComponents.POTION_CONTENTS, potionContents);
-                            displayName = dummyStack.getHoverName().getString();
-                        }
-                        lines.add(Component.literal(displayName + ": " + fluid.getAmount() + " / " + tank.getCapacity() + " mB"));
-
-                        if (potionContents != null && !potionContents.equals(PotionContents.EMPTY)) {
-                            for (MobEffectInstance effect : potionContents.getAllEffects()) {
-                                Component effectLine = Component.translatable(effect.getDescriptionId())
-                                        .append(" " + (effect.getAmplifier() + 1))
-                                        .append(" (" + effect.getDuration() / 20 + "s)");
-                                lines.add(effectLine);
-                            }
-                        }
-
-                        graphics.renderComponentTooltip(font, lines, mouseX, mouseY);
-                        return;
+    public List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side, RandomSource rand, ModelData data, @Nullable RenderType renderType) {
+        List<BakedQuad> quads = new ArrayList<>(baseModel.getQuads(state, side, rand, data, renderType));
+        if (renderType == RenderType.translucent()) {
+            List<TankRenderInfo> infos = data.get(TankModelData.TANK_RENDER_INFO_LIST);
+            if (infos != null) {
+                int count = Math.min(infos.size(), tankCount);
+                for (int i = 0; i < count; i++) {
+                    TankRenderInfo info = infos.get(i);
+                    if (info == null || info.getFluid().isEmpty() || info.getFillRatio() <= 0.001f) continue;
+                    FluidStack fluid = info.getFluid();
+                    float ratio = info.getFillRatio();
+                    IClientFluidTypeExtensions extensions = IClientFluidTypeExtensions.of(fluid.getFluid());
+                    TextureAtlasSprite sprite = Minecraft.getInstance().getTextureAtlas(InventoryMenu.BLOCK_ATLAS)
+                            .apply(extensions.getStillTexture(fluid));
+                    if (sprite == null) continue;
+                    int tint = extensions.getTintColor(fluid);
+                    float r = ((tint >> 16) & 0xFF) / 255.0f;
+                    float g = ((tint >> 8) & 0xFF) / 255.0f;
+                    float b = (tint & 0xFF) / 255.0f;
+                    float a = ((tint >> 24) & 0xFF) / 255.0f;
+                    float segmentWidth = 1.0f / tankCount;
+                    float minX = i * segmentWidth;
+                    float maxX = (i + 1) * segmentWidth;
+                    List<Direction> faces = (side == null) ? List.of(Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST, Direction.UP) : List.of(side);
+                    for (Direction dir : faces) {
+                        BakedQuad quad = buildFluidQuad(sprite, r, g, b, a, dir, ratio, minX, maxX);
+                        if (quad != null) quads.add(quad);
                     }
                 }
             }
         }
-        super.renderTooltip(graphics, mouseX, mouseY);
+        return quads;
     }
 
-    @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        if (mouseX >= leftPos && mouseX <= leftPos + imageWidth && mouseY >= topPos && mouseY <= topPos + imageHeight) {
-            int maxOffset = menu.getMaxScrollOffset();
-            if (maxOffset > 0) {
-                menu.updateSlotPositions(menu.getScrollOffset() - (int) scrollY);
-                return true;
-            }
+    private BakedQuad buildFluidQuad(TextureAtlasSprite sprite, float r, float g, float b, float a,
+                                      Direction dir, float ratio, float minX, float maxX) {
+        QuadBakingVertexConsumer builder = new QuadBakingVertexConsumer();
+        builder.setSprite(sprite);
+        builder.setDirection(dir);
+        builder.setTintIndex(-1);
+        float minY = 0, maxY = ratio, minZ = 0, maxZ = 1;
+        float u0 = sprite.getU0(), u1 = sprite.getU1();
+        float v0 = sprite.getV0(), v1 = sprite.getV1();
+        if (dir == Direction.EAST || dir == Direction.WEST) {
+            minX = 0; maxX = 1; // full width for side faces
         }
-        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
-    }
-
-    @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        int barX = leftPos + imageWidth + 4;
-        int barY = topPos + 18;
-        int barHeight = VISIBLE_ROWS * 18;
-        if (mouseX >= barX && mouseX <= barX + 8 && mouseY >= barY && mouseY <= barY + barHeight) {
-            isDraggingScroll = true;
-            updateScrollFromMouse(mouseY);
-            return true;
+        switch (dir) {
+            case NORTH:
+                builder.addVertex(maxX, minY, minZ).setColor(r, g, b, a).setUv(u1, v1).setNormal(0, 0, -1);
+                builder.addVertex(minX, minY, minZ).setColor(r, g, b, a).setUv(u0, v1).setNormal(0, 0, -1);
+                builder.addVertex(minX, maxY, minZ).setColor(r, g, b, a).setUv(u0, v0).setNormal(0, 0, -1);
+                builder.addVertex(maxX, maxY, minZ).setColor(r, g, b, a).setUv(u1, v0).setNormal(0, 0, -1);
+                break;
+            case SOUTH:
+                builder.addVertex(minX, minY, maxZ).setColor(r, g, b, a).setUv(u1, v1).setNormal(0, 0, 1);
+                builder.addVertex(maxX, minY, maxZ).setColor(r, g, b, a).setUv(u0, v1).setNormal(0, 0, 1);
+                builder.addVertex(maxX, maxY, maxZ).setColor(r, g, b, a).setUv(u0, v0).setNormal(0, 0, 1);
+                builder.addVertex(minX, maxY, maxZ).setColor(r, g, b, a).setUv(u1, v0).setNormal(0, 0, 1);
+                break;
+            case EAST:
+                builder.addVertex(maxX, minY, maxZ).setColor(r, g, b, a).setUv(u1, v1).setNormal(1, 0, 0);
+                builder.addVertex(maxX, minY, minZ).setColor(r, g, b, a).setUv(u0, v1).setNormal(1, 0, 0);
+                builder.addVertex(maxX, maxY, minZ).setColor(r, g, b, a).setUv(u0, v0).setNormal(1, 0, 0);
+                builder.addVertex(maxX, maxY, maxZ).setColor(r, g, b, a).setUv(u1, v0).setNormal(1, 0, 0);
+                break;
+            case WEST:
+                builder.addVertex(minX, minY, minZ).setColor(r, g, b, a).setUv(u1, v1).setNormal(-1, 0, 0);
+                builder.addVertex(minX, minY, maxZ).setColor(r, g, b, a).setUv(u0, v1).setNormal(-1, 0, 0);
+                builder.addVertex(minX, maxY, maxZ).setColor(r, g, b, a).setUv(u0, v0).setNormal(-1, 0, 0);
+                builder.addVertex(minX, maxY, minZ).setColor(r, g, b, a).setUv(u1, v0).setNormal(-1, 0, 0);
+                break;
+            case UP:
+                if (ratio >= 0.999f) return null;
+                builder.addVertex(minX, ratio, 0).setColor(r, g, b, a).setUv(u0, v0).setNormal(0, 1, 0);
+                builder.addVertex(maxX, ratio, 0).setColor(r, g, b, a).setUv(u1, v0).setNormal(0, 1, 0);
+                builder.addVertex(maxX, ratio, 1).setColor(r, g, b, a).setUv(u1, v1).setNormal(0, 1, 0);
+                builder.addVertex(minX, ratio, 1).setColor(r, g, b, a).setUv(u0, v1).setNormal(0, 1, 0);
+                break;
+            default: return null;
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return builder.bakeQuad();
     }
 
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (isDraggingScroll) {
-            updateScrollFromMouse(mouseY);
-            return true;
+    public ChunkRenderTypeSet getRenderTypes(BlockState state, RandomSource rand, ModelData data) {
+        return ChunkRenderTypeSet.all();
+    }
+    @Override
+    public List<RenderType> getRenderTypes(ItemStack stack, boolean fabulous) {
+        return List.of(RenderType.translucent());
+    }
+    @Override public boolean useAmbientOcclusion() { return true; }
+    @Override public boolean isGui3d() { return true; }
+    @Override public boolean usesBlockLight() { return true; }
+    @Override public boolean isCustomRenderer() { return false; }
+    @Override public TextureAtlasSprite getParticleIcon() { return baseModel.getParticleIcon(); }
+    @Override public ItemOverrides getOverrides() { return ItemOverrides.EMPTY; }
+    @Override
+    public BakedModel applyTransform(ItemDisplayContext transformType, PoseStack poseStack, boolean applyLeftHandTransform) {
+        baseModel.applyTransform(transformType, poseStack, applyLeftHandTransform);
+        return this;
+    }
+}
+'''
+
+# ==================== ClientModEvents.java ====================
+client_events_code = '''package cretae.cookiewyq.create_cookie_conception;
+
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonObject;
+import cretae.cookiewyq.create_cookie_conception.model.TankDynamicBakedModel;
+import cretae.cookiewyq.create_cookie_conception.init.ModMenus;
+import cretae.cookiewyq.create_cookie_conception.screen.TieredContainerScreen;
+import net.minecraft.client.renderer.block.model.ItemOverrides;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.client.resources.model.Material;
+import net.minecraft.client.resources.model.ModelBaker;
+import net.minecraft.client.resources.model.ModelState;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ModelEvent;
+import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
+import net.neoforged.neoforge.client.model.geometry.IGeometryBakingContext;
+import net.neoforged.neoforge.client.model.geometry.IGeometryLoader;
+import net.neoforged.neoforge.client.model.geometry.IUnbakedGeometry;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.Objects;
+import java.util.function.Function;
+
+@EventBusSubscriber(modid = CookieConceptionMod.MODID, value = Dist.CLIENT)
+public class ClientModEvents {
+
+    @SubscribeEvent
+    public static void registerScreens(RegisterMenuScreensEvent event) {
+        event.register(ModMenus.TIERED_CONTAINER.get(), TieredContainerScreen::new);
+    }
+
+    @SubscribeEvent
+    public static void registerGeometryLoaders(ModelEvent.RegisterGeometryLoaders event) {
+        event.register(
+            ResourceLocation.fromNamespaceAndPath(CookieConceptionMod.MODID, "tank_dynamic"),
+            new TankGeometryLoader()
+        );
+    }
+
+    private static class TankGeometryLoader implements IGeometryLoader<TankGeometry> {
+        @Override
+        public TankGeometry read(JsonObject jsonObject, JsonDeserializationContext deserializationContext) {
+            int tankCount = jsonObject.has("tank_count") ? jsonObject.get("tank_count").getAsInt() : 1;
+            return new TankGeometry(tankCount);
         }
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
-    @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        isDraggingScroll = false;
-        return super.mouseReleased(mouseX, mouseY, button);
-    }
+    private static class TankGeometry implements IUnbakedGeometry<TankGeometry> {
+        private final int tankCount;
 
-    private void updateScrollFromMouse(double mouseY) {
-        int barY = topPos + 18;
-        int barHeight = VISIBLE_ROWS * 18;
-        int maxOffset = menu.getMaxScrollOffset();
-        if (maxOffset > 0) {
-            float ratio = (float) (mouseY - barY) / barHeight;
-            ratio = Math.max(0, Math.min(1, ratio));
-            menu.updateSlotPositions((int) (ratio * maxOffset));
+        public TankGeometry(int tankCount) {
+            this.tankCount = tankCount;
+        }
+
+        @Override
+        public @NotNull BakedModel bake(IGeometryBakingContext context, ModelBaker baker, Function<Material, TextureAtlasSprite> spriteGetter, ModelState modelState, ItemOverrides overrides) {
+            BakedModel baseModel = baker.bake(Objects.requireNonNull(context.getRenderTypeHint()), modelState, spriteGetter);
+            return new TankDynamicBakedModel(baseModel, tankCount);
         }
     }
 }
 '''
 
+# ==================== 方块模型 JSON ====================
+andesite_model = '''{
+  "loader": "create_cookie_conception:tank_dynamic",
+  "tank_count": 3,
+  "model": {
+    "parent": "minecraft:block/cube_all",
+    "textures": {
+      "all": "create_cookie_conception:block/andesite_tank"
+    }
+  }
+}
+'''
+
+brass_model = '''{
+  "loader": "create_cookie_conception:tank_dynamic",
+  "tank_count": 4,
+  "model": {
+    "parent": "minecraft:block/cube_all",
+    "textures": {
+      "all": "create_cookie_conception:block/brass_tank"
+    }
+  }
+}
+'''
+
+sturdy_model = '''{
+  "loader": "create_cookie_conception:tank_dynamic",
+  "tank_count": 5,
+  "model": {
+    "parent": "minecraft:block/cube_all",
+    "textures": {
+      "all": "create_cookie_conception:block/sturdy_tank"
+    }
+  }
+}
+'''
+
 if __name__ == "__main__":
+    write_file(os.path.join(PACKAGE_PATH, "util", "TankModelData.java"), tank_model_data)
     write_file(os.path.join(PACKAGE_PATH, "blockentity", "TieredContainerBlockEntity.java"), blockentity_code)
-    write_file(os.path.join(PACKAGE_PATH, "screen", "TieredContainerScreen.java"), screen_code)
-    print("\n编译错误修复，流体更新采用动力泵同款机制，纹理实时刷新。")
+    write_file(os.path.join(PACKAGE_PATH, "model", "TankDynamicBakedModel.java"), dynamic_model_code)
+    write_file(os.path.join(PACKAGE_PATH, "ClientModEvents.java"), client_events_code)
+
+    models_dir = os.path.join(RESOURCES, "assets", "create_cookie_conception", "models", "block")
+    write_file(os.path.join(models_dir, "andesite_tank.json"), andesite_model)
+    write_file(os.path.join(models_dir, "brass_tank.json"), brass_model)
+    write_file(os.path.join(models_dir, "sturdy_tank.json"), sturdy_model)
+
+    print("\n全部文件更新完成。药水与水严格分离，纹理实时刷新。")

@@ -1,8 +1,10 @@
 {
   "loader": "create_cookie_conception:tank_dynamic",
-  "parent": "block/block",
-  "textures": {
-    "all": "create_cookie_conception:block/brass_tank"
-  },
-  "render_type": "translucent"
+  "tank_count": 4,
+  "model": {
+    "parent": "minecraft:block/cube_all",
+    "textures": {
+      "all": "create_cookie_conception:block/brass_tank"
+    }
+  }
 }

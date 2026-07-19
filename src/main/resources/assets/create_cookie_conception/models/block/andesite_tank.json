@@ -1,8 +1,10 @@
 {
   "loader": "create_cookie_conception:tank_dynamic",
-  "parent": "block/block",
-  "textures": {
-    "all": "create_cookie_conception:block/andesite_tank"
-  },
-  "render_type": "translucent"
+  "tank_count": 3,
+  "model": {
+    "parent": "minecraft:block/cube_all",
+    "textures": {
+      "all": "create_cookie_conception:block/andesite_tank"
+    }
+  }
 }

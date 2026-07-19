@@ -5,7 +5,6 @@ import cretae.cookiewyq.create_cookie_conception.init.ModBlockEntities;
 import cretae.cookiewyq.create_cookie_conception.menu.TieredContainerMenu;
 import cretae.cookiewyq.create_cookie_conception.util.TankRenderInfo;
 import cretae.cookiewyq.create_cookie_conception.util.TankModelData;
-import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;
@@ -15,6 +14,7 @@ import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.player.Inventory;
@@ -62,6 +62,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
     private final List<ItemStackHandler> outputHandlers = new ArrayList<>();
     private List<TankRenderInfo> tankRenderInfos = new ArrayList<>();
 
+    // Helper to compare potion effects
     private static boolean arePotionsEquivalent(PotionContents a, PotionContents b) {
         if (a == null || b == null) return false;
         List<MobEffectInstance> effectsA = new ArrayList<>();
@@ -79,6 +80,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
         return true;
     }
 
+    // Internal input check: potion cannot go into water, water cannot go into potion
     private static boolean canInternalInputMerge(FluidTank tank, FluidStack toFill) {
         if (tank.getFluid().isEmpty()) return true;
         Fluid existingFluid = tank.getFluid().getFluid();
@@ -97,7 +99,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
         return existingFluid == incomingFluid;
     }
 
-    // Custom tank that allows merging via forceMix parameter, with public trigger
+    // Custom tank that supports forced mixing
     private static class TieredFluidTank extends FluidTank {
         public TieredFluidTank(int capacity, Predicate<FluidStack> validator) {
             super(capacity, validator);
@@ -130,7 +132,6 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
             return 0;
         }
 
-        // Public method to force trigger onContentsChanged externally
         public void fireOnChanged() {
             onContentsChanged();
         }
@@ -408,7 +409,9 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
     @Override
     public @NotNull ModelData getModelData() {
         if (tankRenderInfos.isEmpty()) return ModelData.EMPTY;
-        return ModelData.builder().with(TankModelData.TANK_RENDER_INFO, tankRenderInfos.get(0)).build();
+        return ModelData.builder()
+                .with(TankModelData.TANK_RENDER_INFO_LIST, tankRenderInfos)
+                .build();
     }
 
     @Override
@@ -513,8 +516,8 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
     @Override public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket pkt, HolderLookup.Provider reg) {
         loadAdditional(pkt.getTag(), reg);
         if (level != null && level.isClientSide) {
+            updateRenderInfo();
             requestModelDataUpdate();
-            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
         }
     }
 
@@ -524,7 +527,13 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
         if (level != null) {
             if (!level.isClientSide) {
                 level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+                for (ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
+                    if (player.distanceToSqr(worldPosition.getX() + 0.5, worldPosition.getY() + 0.5, worldPosition.getZ() + 0.5) <= 64 * 64) {
+                        player.connection.send(getUpdatePacket());
+                    }
+                }
             } else {
+                updateRenderInfo();
                 requestModelDataUpdate();
             }
         }
@@ -581,18 +590,15 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
         @Override
         public int fill(FluidStack resource, FluidAction action) {
             if (resource.isEmpty()) return 0;
+            // External fill: strict fluid type match, potion and water are different
             for (int i = 0; i < tanks.size(); i++) {
                 FluidTank tank = tanks.get(i);
                 if (!tank.getFluid().isEmpty() && tank.getFluid().getFluid() == resource.getFluid()) {
-                    int filled = fillTank(i, resource, action, false);
-                    if (filled > 0) return filled;
-                }
-            }
-            for (int i = 0; i < tanks.size(); i++) {
-                FluidTank tank = tanks.get(i);
-                if (tank.getFluid().isEmpty()) {
                     return fillTank(i, resource, action, false);
                 }
+            }
+            for (FluidTank tank : tanks) {
+                if (tank.getFluid().isEmpty()) return tank.fill(resource, action);
             }
             return 0;
         }
