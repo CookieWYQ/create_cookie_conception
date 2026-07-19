@@ -2,6 +2,7 @@ package cretae.cookiewyq.create_cookie_conception.blockentity;
 
 import cretae.cookiewyq.create_cookie_conception.blocks.tiered.TieredContainerBlock;
 import cretae.cookiewyq.create_cookie_conception.init.ModBlockEntities;
+import cretae.cookiewyq.create_cookie_conception.init.ModDataComponents;
 import cretae.cookiewyq.create_cookie_conception.menu.TieredContainerMenu;
 import cretae.cookiewyq.create_cookie_conception.util.TankRenderInfo;
 import cretae.cookiewyq.create_cookie_conception.util.TankModelData;
@@ -61,10 +62,14 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
     private final List<ItemStackHandler> inputHandlers = new ArrayList<>();
     private final List<ItemStackHandler> outputHandlers = new ArrayList<>();
     private List<TankRenderInfo> tankRenderInfos = new ArrayList<>();
-    
-    // === 修复：防重入标志，防止递归调用导致数据同步异常 ===
+    private boolean hasStrap = false;
+
     private boolean isProcessingSlot = false;
     private boolean isUpdating = false;
+
+    public TieredContainerBlockEntity(BlockEntityType<TieredContainerBlockEntity> type, BlockPos pos, BlockState state) {
+        super(type, pos, state);
+    }
 
     private static boolean arePotionsEquivalent(PotionContents a, PotionContents b) {
         if (a == null || b == null) return false;
@@ -110,7 +115,6 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
             if (resource.isEmpty() || !isFluidValid(resource)) return 0;
             if (this.fluid.isEmpty()) {
                 int filled = fill(resource, action);
-                // === 修复：确保空槽填充后数据组件也被正确复制 ===
                 if (filled > 0 && action.execute()) {
                     if (resource.has(DataComponents.POTION_CONTENTS) && !this.fluid.has(DataComponents.POTION_CONTENTS)) {
                         this.fluid.set(DataComponents.POTION_CONTENTS, resource.get(DataComponents.POTION_CONTENTS));
@@ -148,10 +152,6 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
         }
     }
 
-    public TieredContainerBlockEntity(BlockEntityType<TieredContainerBlockEntity> type, BlockPos pos, BlockState state) {
-        super(type, pos, state);
-    }
-
     private void applyCapacityFromBlock() {
         if (level != null && getBlockState().getBlock() instanceof TieredContainerBlock tiered) {
             int targetSlots = tiered.getInventorySlots();
@@ -171,7 +171,6 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
 
             List<FluidStack> oldFluids = new ArrayList<>();
             for (FluidTank tank : fluidTanks) oldFluids.add(tank.getFluid().copy());
-
             fluidTanks.clear();
             for (int i = 0; i < targetTanks; i++) {
                 fluidTanks.add(new TieredFluidTank(targetCap, stack -> true) {
@@ -199,8 +198,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
                         TieredContainerBlockEntity.this.onContentsChanged();
                         TieredContainerBlockEntity.this.onInputSlotChanged(getSlotIndex(this));
                     }
-                    @Override
-                    public int getSlotLimit(int slot) { return 1; }
+                    @Override public int getSlotLimit(int slot) { return 1; }
                 };
                 if (i < oldInputs.size()) input.setStackInSlot(0, oldInputs.get(i).getStackInSlot(0));
                 inputHandlers.add(input);
@@ -211,13 +209,11 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
                         TieredContainerBlockEntity.this.onContentsChanged();
                         TieredContainerBlockEntity.this.onOutputSlotChanged(getSlotIndex(this));
                     }
-                    @Override
-                    public int getSlotLimit(int slot) { return 1; }
+                    @Override public int getSlotLimit(int slot) { return 1; }
                 };
                 if (i < oldOutputs.size()) output.setStackInSlot(0, oldOutputs.get(i).getStackInSlot(0));
                 outputHandlers.add(output);
             }
-
             updateRenderInfo();
         }
     }
@@ -231,11 +227,9 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
     }
 
     private void onInputSlotChanged(int index) {
-        // === 修复：防止递归调用 ===
         if (isProcessingSlot) return;
         if (index < 0 || index >= inputHandlers.size()) return;
         if (level == null || level.isClientSide) return;
-        
         isProcessingSlot = true;
         try {
             ItemStackHandler input = inputHandlers.get(index);
@@ -264,7 +258,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
                 if (filled > 0) {
                     input.setStackInSlot(0, ItemStack.EMPTY);
                     input.setStackInSlot(0, execBottle);
-                    this.onContentsChanged();
+                    onContentsChanged();
                 }
                 return;
             }
@@ -295,7 +289,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
                 if (filled > 0) {
                     input.setStackInSlot(0, ItemStack.EMPTY);
                     input.setStackInSlot(0, emptyBottle);
-                    this.onContentsChanged();
+                    onContentsChanged();
                 }
                 return;
             }
@@ -327,7 +321,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
                 if (filled > 0) {
                     input.setStackInSlot(0, ItemStack.EMPTY);
                     input.setStackInSlot(0, emptyResult);
-                    this.onContentsChanged();
+                    onContentsChanged();
                 }
             }
         } finally {
@@ -345,11 +339,9 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
     }
 
     private void onOutputSlotChanged(int index) {
-        // === 修复：防止递归调用 ===
         if (isProcessingSlot) return;
         if (index < 0 || index >= outputHandlers.size()) return;
         if (level == null || level.isClientSide) return;
-        
         isProcessingSlot = true;
         try {
             ItemStackHandler output = outputHandlers.get(index);
@@ -369,7 +361,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
                         tank.drain(250, IFluidHandler.FluidAction.EXECUTE);
                         ItemStack filled = PotionFluidHandler.fillBottle(stack, drained);
                         output.setStackInSlot(0, filled);
-                        this.onContentsChanged();
+                        onContentsChanged();
                     }
                     return;
                 }
@@ -380,7 +372,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
                     if (drained.getAmount() == 250) {
                         tank.drain(250, IFluidHandler.FluidAction.EXECUTE);
                         output.setStackInSlot(0, new ItemStack(Items.HONEY_BOTTLE));
-                        this.onContentsChanged();
+                        onContentsChanged();
                     }
                     return;
                 }
@@ -390,7 +382,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
                     if (drained.getAmount() == 250) {
                         tank.drain(250, IFluidHandler.FluidAction.EXECUTE);
                         output.setStackInSlot(0, PotionContents.createItemStack(Items.POTION, Potions.WATER));
-                        this.onContentsChanged();
+                        onContentsChanged();
                     }
                     return;
                 }
@@ -401,7 +393,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
                 FluidActionResult result = FluidUtil.tryFillContainer(stack, tank, Integer.MAX_VALUE, null, true);
                 if (result.isSuccess()) {
                     output.setStackInSlot(0, result.getResult());
-                    this.onContentsChanged();
+                    onContentsChanged();
                 }
             }
         } finally {
@@ -448,6 +440,9 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
                 .build();
     }
 
+    public boolean hasStrap() { return hasStrap; }
+    public void setHasStrap(boolean value) { this.hasStrap = value; setChanged(); }
+
     @Override
     public void saveAdditional(CompoundTag tag, HolderLookup.Provider reg) {
         super.saveAdditional(tag, reg);
@@ -464,6 +459,7 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
         for (int i = 0; i < outputHandlers.size(); i++)
             outputTag.put("Output" + i, outputHandlers.get(i).serializeNBT(reg));
         tag.put("OutputHandlers", outputTag);
+        tag.putBoolean("HasStrap", hasStrap);
     }
 
     @Override
@@ -527,10 +523,12 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
                 outputHandlers.add(output);
             }
             updateRenderInfo();
+            hasStrap = tag.getBoolean("HasStrap");
         } else {
             itemHandler = savedItems;
             fluidTanks.clear();
             fluidTanks.addAll(savedTanks);
+            hasStrap = tag.getBoolean("HasStrap");
         }
     }
 
@@ -556,7 +554,6 @@ public class TieredContainerBlockEntity extends BlockEntity implements MenuProvi
     }
 
     public void onContentsChanged() {
-        // === 修复：防止重入，确保每次更新都是完整的 ===
         if (isUpdating) return;
         isUpdating = true;
         try {

@@ -9,6 +9,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.*;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
+import cretae.cookiewyq.create_cookie_conception.init.ModDataComponents;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
@@ -64,6 +65,12 @@ public class AndesiteContainerBlock extends Block implements EntityBlock, Tiered
                     CompoundTag tag = tankBe.getPersistentData(level.registryAccess());
                     ItemStack dropStack = new ItemStack(this.asItem());
                     BlockItem.setBlockEntityData(dropStack, ModBlockEntities.TIERED_CONTAINER.get(), tag);
+                        if (tankBe.hasStrap()) {
+                            dropStack.set(ModDataComponents.HAS_STRAP.get(), true);
+                        }
+                if (tankBe.hasStrap()) {
+                    dropStack.set(ModDataComponents.HAS_STRAP.get(), true);
+                }
                     if (!player.getInventory().add(dropStack)) {
                         Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), dropStack);
                     }
@@ -82,6 +89,12 @@ public class AndesiteContainerBlock extends Block implements EntityBlock, Tiered
             CompoundTag tag = tankBe.getPersistentData(builder.getLevel().registryAccess());
             ItemStack dropStack = new ItemStack(this.asItem());
             BlockItem.setBlockEntityData(dropStack, ModBlockEntities.TIERED_CONTAINER.get(), tag);
+                        if (tankBe.hasStrap()) {
+                            dropStack.set(ModDataComponents.HAS_STRAP.get(), true);
+                        }
+                if (tankBe.hasStrap()) {
+                    dropStack.set(ModDataComponents.HAS_STRAP.get(), true);
+                }
             return List.of(dropStack);
         }
         return List.of(new ItemStack(this.asItem()));
@@ -95,6 +108,12 @@ public class AndesiteContainerBlock extends Block implements EntityBlock, Tiered
                 CompoundTag tag = tankBe.getPersistentData(level.registryAccess());
                 ItemStack dropStack = new ItemStack(this.asItem());
                 BlockItem.setBlockEntityData(dropStack, ModBlockEntities.TIERED_CONTAINER.get(), tag);
+                        if (tankBe.hasStrap()) {
+                            dropStack.set(ModDataComponents.HAS_STRAP.get(), true);
+                        }
+                if (tankBe.hasStrap()) {
+                    dropStack.set(ModDataComponents.HAS_STRAP.get(), true);
+                }
                 Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), dropStack);
             }
         }
