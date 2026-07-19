@@ -9,6 +9,7 @@ import cretae.cookiewyq.create_cookie_conception.blocks.ModBlocks;
 import cretae.cookiewyq.create_cookie_conception.init.ModBlockEntities;
 import cretae.cookiewyq.create_cookie_conception.init.ModDataComponents;
 import cretae.cookiewyq.create_cookie_conception.init.ModMenus;
+import cretae.cookiewyq.create_cookie_conception.init.ModRecipes;
 import cretae.cookiewyq.create_cookie_conception.items.ModItems;
 import cretae.cookiewyq.create_cookie_conception.tabs.ModTabs;
 import net.createmod.catnip.lang.FontHelper;
@@ -61,6 +62,7 @@ public class CookieConceptionMod {
         REGISTRATE.registerEventListeners(modEventBus);
         TABS.register(modEventBus);
         ModDataComponents.COMPONENTS.register(modEventBus);
+        ModRecipes.RECIPES.register(modEventBus);
         NeoForge.EVENT_BUS.register(this);
         modEventBus.addListener(this::addCreative);
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
