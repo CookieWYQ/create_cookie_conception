@@ -10,7 +10,9 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerLevelAccess;
 import net.minecraft.world.inventory.Slot;
-import net.minecraft.world.item.*;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.PotionItem;
 import net.neoforged.neoforge.fluids.FluidUtil;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.ItemStackHandler;
@@ -32,21 +34,24 @@ public class TieredContainerMenu extends AbstractContainerMenu {
     private final List<SlotItemHandler> inputSlots = new ArrayList<>();
     private final List<SlotItemHandler> outputSlots = new ArrayList<>();
 
+    // Client constructor
     public TieredContainerMenu(int id, Inventory inv, FriendlyByteBuf extraData) {
         super(ModMenus.TIERED_CONTAINER.get(), id);
+        extraData.readBoolean(); // consume virtual flag (always false)
         this.pos = extraData.readBlockPos();
         int slots = extraData.readVarInt();
         int tanks = extraData.readVarInt();
-        this.tankCount = tanks;
         this.blockEntity = (TieredContainerBlockEntity) inv.player.level().getBlockEntity(pos);
         this.itemHandler = blockEntity != null ? blockEntity.getItemHandler() : new ItemStackHandler(slots);
         this.playerInventory = inv;
         this.containerSlots = itemHandler.getSlots();
+        this.tankCount = blockEntity != null ? blockEntity.getFluidTanks().size() : tanks;
 
         addDedicatedSlots();
         addMainSlots();
     }
 
+    // Server constructor
     public TieredContainerMenu(int id, Inventory inv, TieredContainerBlockEntity be) {
         super(ModMenus.TIERED_CONTAINER.get(), id);
         this.pos = be.getBlockPos();
@@ -61,27 +66,30 @@ public class TieredContainerMenu extends AbstractContainerMenu {
     }
 
     private void addDedicatedSlots() {
+        if (blockEntity == null) return;
         List<ItemStackHandler> inputs = blockEntity.getInputHandlers();
         List<ItemStackHandler> outputs = blockEntity.getOutputHandlers();
         for (int i = 0; i < tankCount; i++) {
-            // Input slot: fluid containers, potions, honey bottles
+            // Input slot: accept any item that contains a fluid (potion, bottle, bucket, honey bottle)
             SlotItemHandler inputSlot = new SlotItemHandler(inputs.get(i), 0, 0, 0) {
                 @Override
                 public boolean mayPlace(ItemStack stack) {
-                    if (stack.isEmpty()) return true;
+                    // Allow any fluid handler with fluid inside
                     if (FluidUtil.getFluidContained(stack).isPresent()) return true;
-                    return stack.getItem() instanceof PotionItem || stack.is(Items.HONEY_BOTTLE);
+                    // Allow honey bottle and potion items explicitly (might not be caught by FluidUtil)
+                    return stack.is(Items.HONEY_BOTTLE) || stack.getItem() instanceof PotionItem;
                 }
             };
             this.addSlot(inputSlot);
             this.inputSlots.add(inputSlot);
 
-            // Output slot: empty fluid containers, including empty glass bottles
+            // Output slot: accept empty fluid containers (bucket, glass bottle, etc.)
             SlotItemHandler outputSlot = new SlotItemHandler(outputs.get(i), 0, 0, 0) {
                 @Override
                 public boolean mayPlace(ItemStack stack) {
-                    if (stack.isEmpty()) return true;
+                    // Must be empty of fluid
                     if (FluidUtil.getFluidContained(stack).isPresent()) return false;
+                    // Must be a fluid handler or a glass bottle
                     return FluidUtil.getFluidHandler(stack).isPresent() || stack.is(Items.GLASS_BOTTLE);
                 }
             };

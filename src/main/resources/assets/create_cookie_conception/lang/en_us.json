@@ -1,5 +1,12 @@
 {
+    "itemGroup.create_cookie_conception": "Create: Cookie Conception",
     "block.create_cookie_conception.andesite_tank": "Andesite Tank",
     "block.create_cookie_conception.brass_tank": "Brass Tank",
-    "block.create_cookie_conception.sturdy_tank": "Sturdy Tank"
+    "block.create_cookie_conception.sturdy_tank": "Sturdy Tank",
+    "block.create_cookie_conception.inventory_proxy": "Inventory Proxy",
+    "item.create_cookie_conception.backpack_strap": "Backpack Strap",
+    "tooltip.create_cookie_conception.can_wear_on_back": "Can be worn on back",
+    "tooltip.create_cookie_conception.cannot_wear_on_back": "Cannot be worn on back yet",
+    "key.create_cookie_conception.open_back_tank": "Open Back Tank",
+    "key.categories.create_cookie_conception": "Create: Cookie Conception"
 }

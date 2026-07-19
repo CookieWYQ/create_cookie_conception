@@ -1,5 +1,12 @@
 {
+    "itemGroup.create_cookie_conception": "机械动力：Cookie的奇思妙想",
     "block.create_cookie_conception.andesite_tank": "安山储罐",
     "block.create_cookie_conception.brass_tank": "黄铜储罐",
-    "block.create_cookie_conception.sturdy_tank": "坚固储罐"
+    "block.create_cookie_conception.sturdy_tank": "坚固储罐",
+    "block.create_cookie_conception.inventory_proxy": "库存代理",
+    "item.create_cookie_conception.backpack_strap": "背包绑带",
+    "tooltip.create_cookie_conception.can_wear_on_back": "可以背在身上",
+    "tooltip.create_cookie_conception.cannot_wear_on_back": "现在还不能背着",
+    "key.create_cookie_conception.open_back_tank": "打开背部储罐",
+    "key.categories.create_cookie_conception": "机械动力：Cookie的奇思妙想"
 }

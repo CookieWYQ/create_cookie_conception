@@ -46,10 +46,10 @@ public class BrassContainerBlock extends Block implements EntityBlock, TieredCon
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof TieredContainerBlockEntity be) {
             ((ServerPlayer) player).openMenu(be, buf -> {
+                buf.writeBoolean(false); // isVirtual = false
                 buf.writeBlockPos(pos);
                 buf.writeVarInt(be.getItemHandler().getSlots());
                 buf.writeVarInt(be.getFluidTanks().size());
-                buf.writeVarInt(be.getInputHandlers().size()); // tank count
             });
         }
         return InteractionResult.SUCCESS;

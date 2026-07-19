@@ -1,0 +1,12 @@
+{
+  "type": "create_cookie_conception:strap_crafting",
+  "category": "misc",
+  "ingredients": [
+    { "item": "create_cookie_conception:sturdy_tank" },
+    { "item": "create_cookie_conception:backpack_strap" }
+  ],
+  "result": {
+    "id": "create_cookie_conception:sturdy_tank",
+    "count": 1
+  }
+}

@@ -2,9 +2,10 @@ package cretae.cookiewyq.create_cookie_conception;
 
 import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonObject;
-import cretae.cookiewyq.create_cookie_conception.model.TankDynamicBakedModel;
 import cretae.cookiewyq.create_cookie_conception.init.ModMenus;
+import cretae.cookiewyq.create_cookie_conception.model.TankDynamicBakedModel;
 import cretae.cookiewyq.create_cookie_conception.screen.TieredContainerScreen;
+import cretae.cookiewyq.create_cookie_conception.screen.VirtualTieredContainerScreen;
 import net.minecraft.client.renderer.block.model.ItemOverrides;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.BakedModel;
@@ -32,6 +33,7 @@ public class ClientModEvents {
     @SubscribeEvent
     public static void registerScreens(RegisterMenuScreensEvent event) {
         event.register(ModMenus.TIERED_CONTAINER.get(), TieredContainerScreen::new);
+        event.register(ModMenus.VIRTUAL_TIERED_CONTAINER.get(), VirtualTieredContainerScreen::new);
     }
 
     @SubscribeEvent

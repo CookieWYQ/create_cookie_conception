@@ -9,6 +9,7 @@ version = mod_version
 group = mod_group_id
 
 repositories {
+    maven { url = "https://maven.theillusivec4.top/" }
     mavenLocal()
 }
 
@@ -19,6 +20,7 @@ base {
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 repositories {
+    maven { url = "https://maven.theillusivec4.top/" }
     maven {
         // location of the maven that hosts JEI files since January 2023
         name = "Jared's maven"
@@ -32,6 +34,9 @@ repositories {
 }
 
 dependencies {
+    runtimeOnly("top.theillusivec4.curios:curios-neoforge:${curios_version}")
+    compileOnly("top.theillusivec4.curios:curios-neoforge:${curios_version}:api")
+
     /* other minecraft dependencies are here */
 
     // compile against the JEI API but do not include it at runtime
@@ -41,11 +46,15 @@ dependencies {
 }
 
 repositories {
+    maven { url = "https://maven.theillusivec4.top/" }
     maven { url = "https://maven.createmod.net" } // Create, Ponder, Flywheel
     maven { url = "https://maven.ithundxr.dev/snapshots" } // Registrate
 }
 
 dependencies {
+    runtimeOnly("top.theillusivec4.curios:curios-neoforge:${curios_version}")
+    compileOnly("top.theillusivec4.curios:curios-neoforge:${curios_version}:api")
+
     implementation("com.simibubi.create:create-${minecraft_version}:${create_version}:slim") { transitive = false }
     implementation("net.createmod.ponder:ponder-neoforge:${ponder_version}+mc${minecraft_version}")
     compileOnly("dev.engine-room.flywheel:flywheel-neoforge-api-${minecraft_version}:${flywheel_version}")
@@ -131,6 +140,9 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 
 dependencies {
+    runtimeOnly("top.theillusivec4.curios:curios-neoforge:${curios_version}")
+    compileOnly("top.theillusivec4.curios:curios-neoforge:${curios_version}:api")
+
     // Example mod dependency with JEI
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
     // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"
@@ -187,6 +199,7 @@ publishing {
         }
     }
     repositories {
+    maven { url = "https://maven.theillusivec4.top/" }
         maven {
             url "file://${project.projectDir}/repo"
         }

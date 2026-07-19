@@ -2,8 +2,6 @@ package cretae.cookiewyq.create_cookie_conception.blocks;
 
 import com.simibubi.create.AllBlocks;
 import com.simibubi.create.AllItems;
-import com.simibubi.create.foundation.data.BlockStateGen;
-import com.simibubi.create.foundation.data.ModelGen;
 import com.simibubi.create.foundation.data.TagGen;
 import com.tterrag.registrate.providers.RegistrateRecipeProvider;
 import com.tterrag.registrate.util.entry.BlockEntry;
@@ -12,13 +10,11 @@ import cretae.cookiewyq.create_cookie_conception.blocks.tiered.AndesiteContainer
 import cretae.cookiewyq.create_cookie_conception.blocks.tiered.BrassContainerBlock;
 import cretae.cookiewyq.create_cookie_conception.blocks.tiered.SturdyContainerBlock;
 import cretae.cookiewyq.create_cookie_conception.items.TieredContainerBlockItem;
+import cretae.cookiewyq.create_cookie_conception.tabs.ModTabs;
 import net.minecraft.data.recipes.RecipeCategory;
 import net.minecraft.data.recipes.ShapedRecipeBuilder;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.BlockTags;
-import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SoundType;
@@ -27,7 +23,6 @@ import net.minecraft.world.level.material.MapColor;
 import static cretae.cookiewyq.create_cookie_conception.CookieConceptionMod.REGISTRATE;
 
 public class ModBlocks {
-    // inventory_proxy uses cubeBottomTop model with top and side textures
     public static final BlockEntry<Block> INVENTORY_PROXY = REGISTRATE
             .block("inventory_proxy", Block::new)
             .initialProperties(() -> Blocks.IRON_BLOCK)
@@ -41,7 +36,7 @@ public class ModBlocks {
             .transform(TagGen.pickaxeOnly())
             .tag(BlockTags.MINEABLE_WITH_PICKAXE)
             .item()
-            .tab(CreativeModeTabs.COMBAT)
+            .tab(ModTabs.CREATIVE_TAB_KEY)
             .build()
             .lang("Inventory Proxy")
             .recipe((ctx, provider) -> ShapedRecipeBuilder.shaped(RecipeCategory.COMBAT, ctx.get())
@@ -53,7 +48,6 @@ public class ModBlocks {
                     .save(provider, CookieConceptionMod.modLoc("inventory_proxy")))
             .register();
 
-    // Three tank blocks (use cube_all model)
     public static final BlockEntry<AndesiteContainerBlock> ANDESITE_TANK = REGISTRATE
             .block("andesite_tank", AndesiteContainerBlock::new)
             .initialProperties(() -> Blocks.IRON_BLOCK)
@@ -62,7 +56,7 @@ public class ModBlocks {
             .transform(TagGen.pickaxeOnly())
             .tag(BlockTags.MINEABLE_WITH_PICKAXE)
             .item((block, props) -> new TieredContainerBlockItem(block, new Item.Properties()))
-            .tab(CreativeModeTabs.COMBAT)
+            .tab(ModTabs.CREATIVE_TAB_KEY)
             .build()
             .lang("Andesite Tank")
             .recipe((ctx, provider) -> ShapedRecipeBuilder.shaped(RecipeCategory.COMBAT, ctx.get())
@@ -83,7 +77,7 @@ public class ModBlocks {
             .transform(TagGen.pickaxeOnly())
             .tag(BlockTags.MINEABLE_WITH_PICKAXE)
             .item((block, props) -> new TieredContainerBlockItem(block, new Item.Properties()))
-            .tab(CreativeModeTabs.COMBAT)
+            .tab(ModTabs.CREATIVE_TAB_KEY)
             .build()
             .lang("Brass Tank")
             .recipe((ctx, provider) -> ShapedRecipeBuilder.shaped(RecipeCategory.COMBAT, ctx.get())
@@ -104,7 +98,7 @@ public class ModBlocks {
             .transform(TagGen.pickaxeOnly())
             .tag(BlockTags.MINEABLE_WITH_PICKAXE)
             .item((block, props) -> new TieredContainerBlockItem(block, new Item.Properties()))
-            .tab(CreativeModeTabs.COMBAT)
+            .tab(ModTabs.CREATIVE_TAB_KEY)
             .build()
             .lang("Sturdy Tank")
             .recipe((ctx, provider) -> ShapedRecipeBuilder.shaped(RecipeCategory.COMBAT, ctx.get())
