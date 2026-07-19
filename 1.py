@@ -7,106 +7,135 @@ def write_file(path, content):
 
 def main():
     base = os.path.dirname(os.path.abspath(__file__))
-    java = os.path.join(base, "src", "main", "java", "cretae", "cookiewyq", "create_cookie_conception")
+    java_pkg = os.path.join(base, "src", "main", "java", "cretae", "cookiewyq", "create_cookie_conception", "blocks")
 
-    # The only missing piece: register ModRecipes in the mod class
-    write_file(os.path.join(java, "CookieConceptionMod.java"), '''package cretae.cookiewyq.create_cookie_conception;
+    mod_blocks_content = '''package cretae.cookiewyq.create_cookie_conception.blocks;
 
-import com.mojang.logging.LogUtils;
-import com.simibubi.create.foundation.data.CreateRegistrate;
-import com.simibubi.create.foundation.item.ItemDescription;
-import com.simibubi.create.foundation.item.KineticStats;
-import com.simibubi.create.foundation.item.TooltipModifier;
-import cretae.cookiewyq.create_cookie_conception.blocks.ModBlocks;
-import cretae.cookiewyq.create_cookie_conception.init.ModBlockEntities;
-import cretae.cookiewyq.create_cookie_conception.init.ModDataComponents;
-import cretae.cookiewyq.create_cookie_conception.init.ModMenus;
-import cretae.cookiewyq.create_cookie_conception.init.ModRecipes;
-import cretae.cookiewyq.create_cookie_conception.items.ModItems;
+import com.simibubi.create.AllBlocks;
+import com.simibubi.create.AllItems;
+import com.simibubi.create.foundation.data.TagGen;
+import com.tterrag.registrate.providers.RegistrateRecipeProvider;
+import com.tterrag.registrate.util.entry.BlockEntry;
+import cretae.cookiewyq.create_cookie_conception.CookieConceptionMod;
+import cretae.cookiewyq.create_cookie_conception.blocks.tiered.AndesiteContainerBlock;
+import cretae.cookiewyq.create_cookie_conception.blocks.tiered.BrassContainerBlock;
+import cretae.cookiewyq.create_cookie_conception.blocks.tiered.SturdyContainerBlock;
+import cretae.cookiewyq.create_cookie_conception.items.TieredContainerBlockItem;
 import cretae.cookiewyq.create_cookie_conception.tabs.ModTabs;
-import net.createmod.catnip.lang.FontHelper;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.CreativeModeTab;
-import net.minecraft.world.item.ItemStack;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.config.ModConfig;
-import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
-import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
-import net.neoforged.neoforge.event.server.ServerStartingEvent;
-import net.neoforged.neoforge.registries.DeferredRegister;
-import org.slf4j.Logger;
+import net.minecraft.data.recipes.RecipeCategory;
+import net.minecraft.data.recipes.ShapedRecipeBuilder;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.SoundType;
+import net.minecraft.world.level.material.MapColor;
 
-import java.util.function.Supplier;
+import static cretae.cookiewyq.create_cookie_conception.CookieConceptionMod.REGISTRATE;
 
-@Mod(CookieConceptionMod.MODID)
-public class CookieConceptionMod {
-    public static final String MODID = "create_cookie_conception";
-    public static final Logger LOGGER = LogUtils.getLogger();
-    public static final CreateRegistrate REGISTRATE = CreateRegistrate.create(MODID);
+public class ModBlocks {
+    public static final BlockEntry<Block> INVENTORY_PROXY = REGISTRATE
+            .block("inventory_proxy", Block::new)
+            .initialProperties(() -> Blocks.IRON_BLOCK)
+            .properties(p -> p.mapColor(MapColor.COLOR_YELLOW).sound(SoundType.METAL).strength(3.0f, 6.0f).noOcclusion())
+            .blockstate((c, p) -> {
+                p.simpleBlock(c.get(), p.models().cubeBottomTop(c.getName(),
+                        p.modLoc("block/inventory_proxy/inventory_proxy_side"),
+                        p.modLoc("block/inventory_proxy/inventory_proxy_top"),
+                        p.modLoc("block/inventory_proxy/inventory_proxy_side")));
+            })
+            .transform(TagGen.pickaxeOnly())
+            .tag(BlockTags.MINEABLE_WITH_PICKAXE)
+            .item()
+            .tab(ModTabs.CREATIVE_TAB_KEY)
+            .build()
+            .lang("Inventory Proxy")
+            .recipe((ctx, provider) -> ShapedRecipeBuilder.shaped(RecipeCategory.COMBAT, ctx.get())
+                    .pattern("B B").pattern("AFA").pattern("B B")
+                    .define('B', AllBlocks.BRASS_CASING.asItem())
+                    .define('A', AllItems.ANDESITE_ALLOY.asItem())
+                    .define('F', AllBlocks.BRASS_FUNNEL.asItem())
+                    .unlockedBy("has_brass_casing", RegistrateRecipeProvider.has(AllBlocks.BRASS_CASING.asItem()))
+                    .save(provider, CookieConceptionMod.modLoc("inventory_proxy")))
+            .register();
 
-    public static final DeferredRegister<CreativeModeTab> TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
-    public static final Supplier<CreativeModeTab> CREATIVE_TAB = TABS.register("tab", () -> CreativeModeTab.builder()
-            .icon(() -> new ItemStack(ModBlocks.ANDESITE_TANK.get()))
-            .title(Component.translatable("itemGroup.create_cookie_conception"))
-            .build());
+    public static final BlockEntry<AndesiteContainerBlock> ANDESITE_TANK = REGISTRATE
+            .block("andesite_tank", AndesiteContainerBlock::new)
+            .initialProperties(() -> Blocks.IRON_BLOCK)
+            .properties(p -> p.mapColor(MapColor.COLOR_GRAY).sound(SoundType.METAL).strength(0.2f, 1.0f))
+            .blockstate((c, p) -> p.simpleBlock(c.get()))
+            .transform(TagGen.pickaxeOnly())
+            .tag(BlockTags.MINEABLE_WITH_PICKAXE)
+            .item((block, props) -> new TieredContainerBlockItem(block, new Item.Properties()))
+            .tab(ModTabs.CREATIVE_TAB_KEY)
+            .build()
+            .lang("Andesite Tank")
+            .recipe((ctx, provider) -> ShapedRecipeBuilder.shaped(RecipeCategory.COMBAT, ctx.get())
+                    .pattern("   ")
+                    .pattern("ABC")
+                    .pattern("   ")
+                    .define('A', AllBlocks.ITEM_VAULT.asItem())
+                    .define('B', AllItems.ANDESITE_ALLOY.asItem())
+                    .define('C', AllBlocks.FLUID_TANK.asItem())
+                    .unlockedBy("has_item_vault", RegistrateRecipeProvider.has(AllBlocks.ITEM_VAULT.asItem()))
+                    .save(provider, CookieConceptionMod.modLoc("andesite_tank")))
+            .register();
 
-    static {
-        REGISTRATE.defaultCreativeTab(ModTabs.CREATIVE_TAB_KEY);
-        REGISTRATE.setTooltipModifierFactory(item -> new ItemDescription.Modifier(item, FontHelper.Palette.STANDARD_CREATE)
-                .andThen(TooltipModifier.mapNull(KineticStats.create(item))));
-    }
+    public static final BlockEntry<BrassContainerBlock> BRASS_TANK = REGISTRATE
+            .block("brass_tank", BrassContainerBlock::new)
+            .initialProperties(() -> Blocks.IRON_BLOCK)
+            .properties(p -> p.mapColor(MapColor.COLOR_YELLOW).sound(SoundType.METAL).strength(0.3f, 1.5f))
+            .blockstate((c, p) -> p.simpleBlock(c.get()))
+            .transform(TagGen.pickaxeOnly())
+            .tag(BlockTags.MINEABLE_WITH_PICKAXE)
+            .item((block, props) -> new TieredContainerBlockItem(block, new Item.Properties()))
+            .tab(ModTabs.CREATIVE_TAB_KEY)
+            .build()
+            .lang("Brass Tank")
+            .recipe((ctx, provider) -> ShapedRecipeBuilder.shaped(RecipeCategory.COMBAT, ctx.get())
+                    .pattern("A C")
+                    .pattern("ABC")
+                    .pattern("   ")
+                    .define('A', AllBlocks.ITEM_VAULT.asItem())
+                    .define('B', AllItems.BRASS_INGOT.asItem())
+                    .define('C', AllBlocks.FLUID_TANK.asItem())
+                    .unlockedBy("has_item_vault", RegistrateRecipeProvider.has(AllBlocks.ITEM_VAULT.asItem()))
+                    .save(provider, CookieConceptionMod.modLoc("brass_tank")))
+            .register();
 
-    public CookieConceptionMod(IEventBus modEventBus, ModContainer modContainer) {
-        modEventBus.addListener(this::commonSetup);
-        ModBlocks.register();
-        ModBlockEntities.register();
-        ModItems.register();
-        ModMenus.register(modEventBus);
-        REGISTRATE.registerEventListeners(modEventBus);
-        TABS.register(modEventBus);
-        ModDataComponents.COMPONENTS.register(modEventBus);
-        ModRecipes.RECIPES.register(modEventBus);
-        NeoForge.EVENT_BUS.register(this);
-        modEventBus.addListener(this::addCreative);
-        modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
-    }
+    public static final BlockEntry<SturdyContainerBlock> STURDY_TANK = REGISTRATE
+            .block("sturdy_tank", SturdyContainerBlock::new)
+            .initialProperties(() -> Blocks.IRON_BLOCK)
+            .properties(p -> p.mapColor(MapColor.COLOR_BLACK).sound(SoundType.METAL).strength(0.4f, 2.0f))
+            .blockstate((c, p) -> p.simpleBlock(c.get()))
+            .transform(TagGen.pickaxeOnly())
+            .tag(BlockTags.MINEABLE_WITH_PICKAXE)
+            .item((block, props) -> new TieredContainerBlockItem(block, new Item.Properties()))
+            .tab(ModTabs.CREATIVE_TAB_KEY)
+            .build()
+            .lang("Sturdy Tank")
+            .recipe((ctx, provider) -> ShapedRecipeBuilder.shaped(RecipeCategory.COMBAT, ctx.get())
+                    .pattern("A C")
+                    .pattern("ABC")
+                    .pattern("A C")
+                    .define('A', AllBlocks.ITEM_VAULT.asItem())
+                    .define('B', AllItems.STURDY_SHEET.asItem())
+                    .define('C', AllBlocks.FLUID_TANK.asItem())
+                    .unlockedBy("has_item_vault", RegistrateRecipeProvider.has(AllBlocks.ITEM_VAULT.asItem()))
+                    .save(provider, CookieConceptionMod.modLoc("sturdy_tank")))
+            .register();
 
-    private void commonSetup(final FMLCommonSetupEvent event) {}
-
-    private void addCreative(BuildCreativeModeTabContentsEvent event) {
-        // Registrate automatically adds all items/blocks to the default tab.
-    }
-
-    @SubscribeEvent
-    public void onServerStarting(ServerStartingEvent event) {}
-
-    @EventBusSubscriber(modid = MODID, value = Dist.CLIENT)
-    public static class ClientModEvents {
-        @SubscribeEvent
-        public static void onClientSetup(FMLClientSetupEvent event) {}
-    }
-
-    public static ResourceLocation modLoc(String path) {
-        return ResourceLocation.fromNamespaceAndPath(MODID, path);
-    }
+    public static void register() {}
 }
-''')
+'''
 
-    # Clean up .bak files that can cause duplicate class errors
-    src = os.path.join(base, "src")
-    for root, dirs, files in os.walk(src):
-        for f in files:
-            if f.endswith(".bak"):
-                os.remove(os.path.join(root, f))
+    write_file(os.path.join(java_pkg, "ModBlocks.java"), mod_blocks_content)
+
+    recipe_dir = os.path.join(base, "src", "main", "resources", "data", "create_cookie_conception", "recipe")
+    for tank in ["andesite_tank", "brass_tank", "sturdy_tank"]:
+        json_file = os.path.join(recipe_dir, tank + ".json")
+        if os.path.exists(json_file):
+            os.remove(json_file)
 
 if __name__ == "__main__":
     main()

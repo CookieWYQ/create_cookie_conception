@@ -2,17 +2,20 @@
   "type": "minecraft:crafting_shaped",
   "category": "equipment",
   "key": {
+    "A": {
+      "item": "create:item_vault"
+    },
     "B": {
       "item": "create:brass_ingot"
     },
-    "S": {
-      "item": "create:item_vault"
+    "C": {
+      "item": "create:fluid_tank"
     }
   },
   "pattern": [
-    "BBB",
-    "BSB",
-    "BBB"
+    "A C",
+    "ABC",
+    "   "
   ],
   "result": {
     "count": 1,

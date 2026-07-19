@@ -2,17 +2,20 @@
   "type": "minecraft:crafting_shaped",
   "category": "equipment",
   "key": {
-    "I": {
+    "A": {
+      "item": "create:item_vault"
+    },
+    "B": {
       "item": "create:sturdy_sheet"
     },
-    "S": {
-      "item": "create:item_vault"
+    "C": {
+      "item": "create:fluid_tank"
     }
   },
   "pattern": [
-    "III",
-    "ISI",
-    "III"
+    "A C",
+    "ABC",
+    "A C"
   ],
   "result": {
     "count": 1,

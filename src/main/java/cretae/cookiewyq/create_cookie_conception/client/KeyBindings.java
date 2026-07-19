@@ -11,7 +11,7 @@ public class KeyBindings {
     public static final KeyMapping OPEN_BACK_TANK = new KeyMapping(
             "key.create_cookie_conception.open_back_tank",
             InputConstants.Type.KEYSYM,
-            GLFW.GLFW_KEY_B,
+            GLFW.GLFW_KEY_O,
             "key.categories.create_cookie_conception"
     );
 

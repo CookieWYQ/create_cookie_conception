@@ -6,11 +6,13 @@ import com.simibubi.create.foundation.item.ItemDescription;
 import com.simibubi.create.foundation.item.KineticStats;
 import com.simibubi.create.foundation.item.TooltipModifier;
 import cretae.cookiewyq.create_cookie_conception.blocks.ModBlocks;
+import cretae.cookiewyq.create_cookie_conception.client.KeyBindings;
 import cretae.cookiewyq.create_cookie_conception.init.ModBlockEntities;
 import cretae.cookiewyq.create_cookie_conception.init.ModDataComponents;
 import cretae.cookiewyq.create_cookie_conception.init.ModMenus;
 import cretae.cookiewyq.create_cookie_conception.init.ModRecipes;
 import cretae.cookiewyq.create_cookie_conception.items.ModItems;
+import cretae.cookiewyq.create_cookie_conception.network.ModNetworking;
 import cretae.cookiewyq.create_cookie_conception.tabs.ModTabs;
 import net.createmod.catnip.lang.FontHelper;
 import net.minecraft.core.registries.Registries;
@@ -27,6 +29,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
@@ -63,6 +66,7 @@ public class CookieConceptionMod {
         TABS.register(modEventBus);
         ModDataComponents.COMPONENTS.register(modEventBus);
         ModRecipes.RECIPES.register(modEventBus);
+        ModNetworking.register(modEventBus);
         NeoForge.EVENT_BUS.register(this);
         modEventBus.addListener(this::addCreative);
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
@@ -70,9 +74,7 @@ public class CookieConceptionMod {
 
     private void commonSetup(final FMLCommonSetupEvent event) {}
 
-    private void addCreative(BuildCreativeModeTabContentsEvent event) {
-        // Registrate automatically adds all items/blocks to the default tab.
-    }
+    private void addCreative(BuildCreativeModeTabContentsEvent event) {}
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {}
@@ -81,6 +83,11 @@ public class CookieConceptionMod {
     public static class ClientModEvents {
         @SubscribeEvent
         public static void onClientSetup(FMLClientSetupEvent event) {}
+
+        @SubscribeEvent
+        public static void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
+            event.register(KeyBindings.OPEN_BACK_TANK);
+        }
     }
 
     public static ResourceLocation modLoc(String path) {
